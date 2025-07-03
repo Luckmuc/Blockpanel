@@ -6,7 +6,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from datetime import timedelta
-from auth import authenticate_user, create_access_token, get_current_user, must_change_password, set_new_user
+from auth import authenticate_user, create_access_token, get_current_user, must_change_password, set_new_user, get_security_question, reset_password
 from routes import server_control
 from fastapi.middleware.cors import CORSMiddleware
 import re
@@ -73,6 +73,8 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
 def change_user(
     username: str = Form(...),
     password: str = Form(...),
+    security_question: str = Form(...),
+    security_answer: str = Form(...),
     current_user: dict = Depends(get_current_user)
 ):
     # Validierung
@@ -80,16 +82,41 @@ def change_user(
         raise HTTPException(status_code=400, detail="Username must be 5-20 characters long and contain only letters, numbers, and underscores")
     if not validate_password(password):
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters and contain letters and numbers")
-    
+    if not security_question or not security_answer:
+        raise HTTPException(status_code=400, detail="Sicherheitsfrage und Antwort sind erforderlich")
     # Erlaubt, wenn must_change oder explizit gewünscht (z.B. Settings)
     if not current_user.get("must_change", False) and current_user["username"] == username:
         raise HTTPException(status_code=400, detail="Neuer Username muss sich vom alten unterscheiden")
     try:
-        set_new_user(username, password)
+        set_new_user(username, password, security_question, security_answer)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return {"message": "User & password changed successfully"}
+    return {"message": "User, Passwort & Sicherheitsfrage geändert"}
 
+# Endpunkt: Sicherheitsfrage abfragen
+from fastapi import Body
+
+@app.post("/get_security_question")
+def api_get_security_question(username: str = Body(...)):
+    question = get_security_question(username)
+    if not question:
+        raise HTTPException(status_code=404, detail="Keine Sicherheitsfrage für diesen Benutzer")
+    return {"security_question": question}
+
+# Endpunkt: Passwort zurücksetzen
+@app.post("/reset_password")
+def api_reset_password(
+    username: str = Form(...),
+    security_answer: str = Form(...),
+    new_password: str = Form(...)
+):
+    if not validate_password(new_password):
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters and contain letters and numbers")
+    try:
+        reset_password(username, security_answer, new_password)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"message": "Passwort erfolgreich zurückgesetzt"}
 @app.post("/change_password")
 def change_password(
     old_password: str = Form(...),

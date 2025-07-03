@@ -1,1 +1,1 @@
-{"luckmuc": {"username": "luckmuc", "hashed_password": "$2b$12$Wy.RVkM40iz6e5SiSOt61e64mmw5G29wD4jxXPJuybQ49XegZTkNa", "must_change": false}}
+{"admin": {"username": "admin", "hashed_password": "$2b$12$kP0kwsyx84nrzC7KVe/tke43q9BTf8ldthiz3sHZ88Thu2oOSnJ6O", "must_change": true}}
