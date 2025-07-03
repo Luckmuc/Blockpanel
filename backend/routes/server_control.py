@@ -35,7 +35,7 @@ def is_valid_servername(servername: str):
 def safe_server_path(servername: str, *paths):
     if not is_valid_servername(servername):
         raise HTTPException(status_code=400, detail="Invalid servername")
-    base = os.path.abspath(f"/app/mc_servers/{servername}")
+    base = os.path.abspath(f"../mc_servers/{servername}")
     full = os.path.abspath(os.path.join(base, *paths))
     if not full.startswith(base):
         raise HTTPException(status_code=400, detail="Invalid path")
@@ -43,11 +43,14 @@ def safe_server_path(servername: str, *paths):
 
 
 # Logging setup
+import os
+mc_servers_dir = os.path.abspath("../mc_servers")
+os.makedirs(mc_servers_dir, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s %(levelname)s %(message)s', 
     handlers=[
-        logging.FileHandler("/app/mc_servers/backend.log"),
+        logging.FileHandler(os.path.join(mc_servers_dir, "backend.log")),
         logging.StreamHandler()
     ]
 )
@@ -283,7 +286,19 @@ def accept_eula(servername: str = Form(...), current_user: dict = Depends(get_cu
                 f.write("eula=true\n")
             else:
                 f.write(line)
-    return {"message": "EULA accepted"}
+    
+    # Automatically start the server after EULA acceptance
+    try:
+        start_result = start_server(servername, current_user)
+        if start_result.get("status") == "started":
+            return {"message": "EULA accepted and server started successfully"}
+        elif start_result.get("status") == "already running":
+            return {"message": "EULA accepted (server was already running)"}
+        else:
+            return {"message": "EULA accepted but server failed to start", "start_error": start_result}
+    except Exception as e:
+        logging.error(f"Failed to start server {servername} after EULA acceptance: {e}")
+        return {"message": "EULA accepted but server failed to start", "start_error": str(e)}
 
 @router.delete("/server/delete")
 def delete_server(servername: str, current_user: dict = Depends(get_current_user)):
@@ -298,7 +313,7 @@ def delete_server(servername: str, current_user: dict = Depends(get_current_user
     
 @router.get("/server/list")
 def list_servers_full(current_user: dict = Depends(get_current_user)):
-    base_dir = "/app/mc_servers"
+    base_dir = "../mc_servers"
     servers = []
     if not os.path.exists(base_dir):
         return {"servers":[]}

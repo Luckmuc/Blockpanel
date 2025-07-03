@@ -94,11 +94,14 @@ def change_user(
     return {"message": "User, Passwort & Sicherheitsfrage geändert"}
 
 # Endpunkt: Sicherheitsfrage abfragen
-from fastapi import Body
+from pydantic import BaseModel
+
+class UsernameRequest(BaseModel):
+    username: str
 
 @app.post("/get_security_question")
-def api_get_security_question(username: str = Body(...)):
-    question = get_security_question(username)
+def api_get_security_question(request: UsernameRequest):
+    question = get_security_question(request.username)
     if not question:
         raise HTTPException(status_code=404, detail="Keine Sicherheitsfrage für diesen Benutzer")
     return {"security_question": question}
