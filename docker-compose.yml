@@ -1,0 +1,23 @@
+version: '3.8'
+services:
+  backend:
+    build: ./backend
+    volumes:
+      - ./backend:/app
+      - ./mc_servers:/app/mc_servers
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    restart: unless-stopped
+  frontend:
+    build:
+      context: ./frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "1105:1105"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
