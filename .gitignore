@@ -1,4 +1,8 @@
-echo "node_modules/" >> .gitignore
-echo ".next/" >> .gitignore
-echo "dist/" >> .gitignore
-echo ".env" >> .gitignore
+node_modules/
+.next/
+dist/
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.log
