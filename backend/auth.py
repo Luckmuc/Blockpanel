@@ -6,6 +6,10 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from typing import Optional
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
