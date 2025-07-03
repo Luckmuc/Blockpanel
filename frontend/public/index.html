@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blockpanel - Minecraft Server Management</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🎮 Blockpanel</h1>
+            <p>Privates Web-Panel für Minecraft-Server-Hoster</p>
+        </header>
+
+        <div class="auth-section" id="authSection">
+            <div class="login-form" id="loginForm">
+                <h2>Login</h2>
+                <form id="loginFormElement">
+                    <input type="text" id="username" placeholder="Benutzername" required>
+                    <input type="password" id="password" placeholder="Passwort" required>
+                    <button type="submit">Anmelden</button>
+                </form>
+                <p class="info">Standard-Login: admin / admin</p>
+            </div>
+        </div>
+
+        <div class="main-panel" id="mainPanel" style="display: none;">
+            <nav class="sidebar">
+                <div class="user-info">
+                    <span id="currentUser">Admin</span>
+                    <button id="logoutBtn" class="btn-secondary">Logout</button>
+                </div>
+                <ul class="nav-menu">
+                    <li><a href="#dashboard" data-section="dashboard" class="nav-link active">📊 Dashboard</a></li>
+                    <li><a href="#servers" data-section="servers" class="nav-link">🖥️ Server</a></li>
+                    <li><a href="#system" data-section="system" class="nav-link">⚙️ System</a></li>
+                </ul>
+            </nav>
+
+            <main class="content">
+                <section id="dashboard" class="section active">
+                    <h2>📊 Dashboard</h2>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h3>System Health</h3>
+                            <div id="systemHealth">Lade...</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>RAM Usage</h3>
+                            <div id="ramUsage">Lade...</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Server Status</h3>
+                            <div id="serverCount">Lade...</div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="servers" class="section">
+                    <h2>🖥️ Server Management</h2>
+                    <div class="server-controls">
+                        <button id="createServerBtn" class="btn-primary">Neuen Server erstellen</button>
+                        <button id="refreshServersBtn" class="btn-secondary">Aktualisieren</button>
+                    </div>
+                    <div id="serversList" class="servers-list">
+                        <p>Lade Server...</p>
+                    </div>
+                </section>
+
+                <section id="system" class="section">
+                    <h2>⚙️ System Information</h2>
+                    <div class="system-info">
+                        <div class="info-card">
+                            <h3>Java</h3>
+                            <div id="javaInfo">Lade...</div>
+                        </div>
+                        <div class="info-card">
+                            <h3>Tmux</h3>
+                            <div id="tmuxInfo">Lade...</div>
+                        </div>
+                        <div class="info-card">
+                            <h3>MC Servers Directory</h3>
+                            <div id="mcDirInfo">Lade...</div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
