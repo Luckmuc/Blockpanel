@@ -290,12 +290,18 @@ def accept_eula(servername: str = Form(...), current_user: dict = Depends(get_cu
     # Automatically start the server after EULA acceptance
     try:
         start_result = start_server(servername, current_user)
-        if start_result.get("status") == "started":
-            return {"message": "EULA accepted and server started successfully"}
-        elif start_result.get("status") == "already running":
-            return {"message": "EULA accepted (server was already running)"}
+        
+        # Handle both dict and JSONResponse return types
+        if isinstance(start_result, dict):
+            if start_result.get("status") == "started":
+                return {"message": "EULA accepted and server started successfully"}
+            elif start_result.get("status") == "already running":
+                return {"message": "EULA accepted (server was already running)"}
+            else:
+                return {"message": "EULA accepted but server failed to start", "start_error": start_result}
         else:
-            return {"message": "EULA accepted but server failed to start", "start_error": start_result}
+            # JSONResponse case - server failed to start
+            return {"message": "EULA accepted but server failed to start", "start_error": "Server startup failed"}
     except Exception as e:
         logging.error(f"Failed to start server {servername} after EULA acceptance: {e}")
         return {"message": "EULA accepted but server failed to start", "start_error": str(e)}
