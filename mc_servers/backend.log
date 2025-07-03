@@ -19,3 +19,10 @@ AttributeError: module 'bcrypt' has no attribute '__about__'
 2025-07-03 17:23:49,560 ERROR purpur.jar fehlt für testserver!
 2025-07-03 17:23:49,560 ERROR Failed to start server testserver after EULA acceptance: 'JSONResponse' object has no attribute 'get'
 2025-07-03 17:24:49,638 ERROR purpur.jar fehlt für testserver!
+2025-07-03 17:27:03,882 WARNING (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-07-03 17:27:26,536 ERROR purpur.jar fehlt für testserver!
