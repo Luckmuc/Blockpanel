@@ -1,1 +1,1 @@
-{"admin": {"username": "admin", "hashed_password": "$2b$12$kP0kwsyx84nrzC7KVe/tke43q9BTf8ldthiz3sHZ88Thu2oOSnJ6O", "must_change": true}}
+{"luckmuc": {"username": "luckmuc", "hashed_password": "$2b$12$Q96Wsme6m1r5hl6qKURt3Ovzsk1J.w2KFxXS53RyrajDkTVm7aBgG", "must_change": false, "security_question": "fish", "security_answer": "$2b$12$u5mFRfYJ0B6aOF.rPkU15OtJ9HQ26irfuMN5tlSaK8AEkPAA8Gqgm"}}

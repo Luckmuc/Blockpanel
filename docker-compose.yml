@@ -1,4 +1,4 @@
-version: '3.8'
+
 services:
   backend:
     build: ./backend
@@ -7,6 +7,7 @@ services:
       - ./mc_servers:/app/mc_servers
     ports:
       - "8000:8000"
+      - "25565:25565"
     env_file:
       - .env
     restart: unless-stopped
@@ -17,7 +18,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "1105:1105"
+      - "1105:80"
     environment:
       - NODE_ENV=production
     restart: unless-stopped

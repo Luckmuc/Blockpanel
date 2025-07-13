@@ -91,7 +91,13 @@ def change_user(
         set_new_user(username, password, security_question, security_answer)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return {"message": "User, Passwort & Sicherheitsfrage geändert"}
+    # Return new access token with updated username
+    access_token = create_access_token(data={"sub": username})
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "message": "Username, password & security question changed!"
+    }
 
 # Endpunkt: Sicherheitsfrage abfragen
 from fastapi import Body
