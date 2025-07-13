@@ -14,6 +14,106 @@ import shutil
 import subprocess
 import logging
 
+router = APIRouter()
+
+@router.get("/server/stats")
+def server_stats(servername: str, current_user: dict = Depends(get_current_user)):
+    # RAM allocation (from config)
+    import time
+    import locale as pylocale
+    ram_allocated = get_server_ram(servername)
+    # RAM usage (from process)
+    pid = get_server_proc(servername)
+    ram_used = None
+    uptime = None
+    if pid:
+        try:
+            p = psutil.Process(pid)
+            ram_used = int(p.memory_info().rss / 1024 / 1024)  # MB
+            uptime = int(time.time() - p.create_time())  # seconds
+        except Exception:
+            ram_used = None
+            uptime = None
+    # Plugins
+    plugin_dir = safe_server_path(servername, "plugins")
+    plugins = []
+    if os.path.exists(plugin_dir):
+        plugins = [f for f in os.listdir(plugin_dir) if f.endswith(".jar")]
+    # Properties
+    prop_path = safe_server_path(servername, "server.properties")
+    props = {}
+    if os.path.exists(prop_path):
+        with open(prop_path, "r") as f:
+            for line in f:
+                if "=" in line and not line.strip().startswith("#"):
+                    k, v = line.strip().split("=", 1)
+                    props[k] = v
+    # Player count (try to get from properties or logs)
+    max_players = props.get("max-players")
+    online_players = None
+    # Try to parse from latest.log
+    log_path = safe_server_path(servername, "logs", "latest.log")
+    # Fallback: if logs/latest.log does not exist, use server.log
+    if not os.path.exists(log_path):
+        log_path = safe_server_path(servername, "server.log")
+    if os.path.exists(log_path):
+        try:
+            with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.readlines()[-100:]
+            for line in reversed(lines):
+                if "There are" in line and "of a max of" in line:
+                    import re
+                    m = re.search(r"There are (\d+)/(\d+) players", line)
+                    if m:
+                        online_players = int(m.group(1))
+                        max_players = m.group(2)
+                        break
+        except Exception:
+            pass
+    # IP/Port
+    port = props.get("server-port", "25565")
+    address = f"{socket.gethostbyname(socket.gethostname())}:{port}"
+    # Locale
+    locale = props.get("language", pylocale.getdefaultlocale()[0] or "en_US")
+    # Uptime (already calculated)
+    # Logs (last 30 lines)
+    logs = []
+    if os.path.exists(log_path):
+        with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+            logs = f.readlines()[-30:]
+    # Web link (address)
+    web_link = f"http://{address}"
+    return {
+        "ram_allocated": ram_allocated,
+        "ram_used": ram_used,
+        "uptime": uptime,
+        "plugins": plugins,
+        "player_count": online_players,
+        "max_players": max_players,
+        "address": address,
+        "port": port,
+        "locale": locale,
+        "logs": "".join(logs),
+        "web_link": web_link
+    }
+
+
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, BackgroundTasks, Form
+import subprocess
+import os
+from fastapi.responses import JSONResponse
+import glob
+import psutil
+from auth import get_current_user
+import requests
+import shutil
+import re
+import socket
+import tempfile
+import shutil
+import subprocess
+import logging
+
 def get_pid_file(servername: str):
     return safe_server_path(servername, "mcserver.pid")
 
@@ -268,7 +368,20 @@ def create_server(
         except Exception as fallback_error:
             logging.error(f"Failed to create fallback EULA file for {servername}: {fallback_error}")
     
-    return {"message": "Server created. Please accept the EULA and start the server."}
+    # Versuche, den Server direkt zu starten (Backend-Lösung)
+    try:
+        from fastapi import Request
+        # Starte den Server direkt nach Erstellung und EULA-Generierung
+        start_result = start_server(servername, current_user)
+        if isinstance(start_result, dict) and start_result.get("status") == "already running":
+            return {"message": "Server created and already running."}
+        elif isinstance(start_result, dict) and start_result.get("error"):
+            return {"message": "Server created, but failed to start: " + start_result["error"]}
+        else:
+            return {"message": "Server created and started."}
+    except Exception as e:
+        # Falls Start fehlschlägt, trotzdem Erfolg für Erstellung melden
+        return {"message": f"Server created, but failed to start automatically: {e}. Please accept the EULA and start the server manually."}
 
 @router.post("/server/accept_eula")
 def accept_eula(servername: str = Form(...), current_user: dict = Depends(get_current_user)):
