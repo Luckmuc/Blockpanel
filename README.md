@@ -1,26 +1,27 @@
+
 # Blockpanel
 
-Ein privates Web-Panel für Minecraft-Server-Hoster. Mit Docker, FastAPI und moderner UI.
+A private web panel for Minecraft server hosting. Built with Docker, FastAPI, and a modern UI.
 
 ## Features (Backend)
-- Server starten/stoppen/status
-- Plugins hochladen
-- Logs lesen
-- server.properties editieren
-- Welten erstellen
+- Start/stop/status servers
+- Upload plugins
+- Read logs
+- Edit server.properties
+- Create worlds
 
-## Schnellstart
+## Quickstart
 1. `docker-compose up --build`
-2. Panel unter http://localhost:8000/docs testen
+2. Test the panel at http://localhost:8000/docs
 
 # Blockpanel Backend
 
 ## Features
-- FastAPI-Backend für Minecraft-Server-Panel
-- Multi-Server-Management (Start, Stop, Kill, Restart, Status, Properties, Logs, Plugins, Welten, EULA, Auth)
-- tmux-Prozess-Handling
-- JWT-Auth, sichere Uploads, Directory-Traversal-Schutz
-- Docker- und docker-compose-fähig
+- FastAPI backend for Minecraft server panel
+- Multi-server management (Start, Stop, Kill, Restart, Status, Properties, Logs, Plugins, Worlds, EULA, Auth)
+- tmux process handling
+- JWT auth, secure uploads, directory traversal protection
+- Docker and docker-compose ready
 
 ## Quickstart
 
@@ -29,23 +30,23 @@ Ein privates Web-Panel für Minecraft-Server-Hoster. Mit Docker, FastAPI und mod
    docker compose up --build
    ```
 
-2. **API testen**
+2. **Test API**
    - Login: `/login` (FormData: username, password)
-   - Server-APIs: `/server/*`
+   - Server APIs: `/server/*`
 
-3. **Standard-Login**
-   - Benutzername: `admin`
-   - Passwort: `admin`
+3. **Default Login**
+   - Username: `admin`
+   - Password: `admin`
 
-## Hinweise
-- Server-Initialisierung, Purpur-Download etc. erfolgt über die API (`/server/create`).
-- Plugins-Upload: Nur `.jar` erlaubt, max. 10MB, sichere Pfade.
-- tmux muss im Container installiert sein (siehe Dockerfile).
+## Notes
+- Server initialization, Purpur download, etc. is done via the API (`/server/create`).
+- Plugin upload: Only `.jar` allowed, max. 10MB, secure paths.
+- tmux must be installed in the container (see Dockerfile).
 
 ## Security
-- JWT-Auth für alle kritischen Endpunkte
-- Rate-Limiting empfohlen (optional)
-- Directory-Traversal-Schutz überall
+- JWT auth for all critical endpoints
+- Rate limiting recommended (optional)
+- Directory traversal protection everywhere
 
-## Lizenz
+## License
 MIT
