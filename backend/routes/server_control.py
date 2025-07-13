@@ -130,12 +130,17 @@ def get_server_proc(servername: str):
         return None
     
 def is_valid_servername(servername: str):
+    # Servername darf keine Pfadtrennzeichen oder leere Strings enthalten
+    if not servername or '/' in servername or '\\' in servername:
+        return False
     return re.match(r'^[a-zA-Z0-9_-]+$', servername) is not None
 
 def safe_server_path(servername: str, *paths):
     if not is_valid_servername(servername):
         raise HTTPException(status_code=400, detail="Invalid servername")
-    base = os.path.abspath(f"/app/mc_servers/{servername}")
+    # Cross-platform base dir
+    base_dir = os.environ.get("MC_SERVERS_DIR", os.path.join(os.getcwd(), "mc_servers"))
+    base = os.path.abspath(os.path.join(base_dir, servername))
     full = os.path.abspath(os.path.join(base, *paths))
     if not full.startswith(base):
         raise HTTPException(status_code=400, detail="Invalid path")
@@ -143,11 +148,12 @@ def safe_server_path(servername: str, *paths):
 
 
 # Logging setup
+LOG_PATH = os.environ.get("BACKEND_LOG", os.path.join(os.getcwd(), "mc_servers", "backend.log"))
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s %(levelname)s %(message)s', 
     handlers=[
-        logging.FileHandler("/app/mc_servers/backend.log"),
+        logging.FileHandler(LOG_PATH),
         logging.StreamHandler()
     ]
 )
@@ -290,7 +296,6 @@ def create_server(
 ):
     if not is_valid_servername(servername):
         raise HTTPException(status_code=400, detail="Invalid servername")
-    
     # RAM-Validierung
     try:
         ram_int = int(ram)
@@ -298,7 +303,6 @@ def create_server(
             raise HTTPException(status_code=400, detail="RAM must be between 512MB and 8192MB")
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid RAM value")
-    
     base_path = safe_server_path(servername)
     jar_path = safe_server_path(servername, "purpur.jar")
     os.makedirs(base_path, exist_ok=True)
@@ -310,54 +314,43 @@ def create_server(
                     tmp.write(chunk)
                 tmp_path = tmp.name
         shutil.move(tmp_path, jar_path)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Download failed: {e}")
-    
+        # Setze Ausführberechtigung für purpur.jar (Linux/WSL)
+        try:
+            if os.name != "nt":
+                os.chmod(jar_path, 0o755)
+        except Exception as chmod_err:
+            logging.warning(f"chmod für purpur.jar fehlgeschlagen: {chmod_err}")
+    except Exception:
+        # Keine internen Fehler an den Client
+        raise HTTPException(status_code=500, detail="Download failed.")
     # Speichere die RAM-Konfiguration
     save_server_config(servername, ram)
-    
     # Initial-Run um EULA-Datei zu generieren
     try:
         logging.info(f"Starting initial run for server {servername} with {ram}MB RAM")
-        
-        # Start Java process and let it run briefly to generate EULA
         process = subprocess.Popen([
             "java", f"-Xmx{ram}M", "-jar", "purpur.jar", "nogui"
         ], cwd=base_path, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        
-        # Wait 10 seconds for server to start and generate files
         import time
         time.sleep(10)
-        
-        # Try to stop gracefully first
         try:
             process.stdin.write("stop\n")
             process.stdin.flush()
-            # Wait max 10 more seconds for graceful shutdown
             process.wait(timeout=10)
             logging.info(f"Initial run completed gracefully for {servername}")
         except subprocess.TimeoutExpired:
-            # Force kill if it doesn't stop
             process.kill()
             process.wait()
             logging.info(f"Initial run force-killed for {servername}")
-        
-        # Check if EULA file was created
         eula_path = safe_server_path(servername, "eula.txt")
-        if os.path.exists(eula_path):
-            logging.info(f"EULA file successfully created for {servername}")
-        else:
-            logging.warning(f"EULA file not found after initial run for {servername}")
-            # Create a basic EULA file if it doesn't exist
+        if not os.path.exists(eula_path):
             with open(eula_path, "w") as f:
                 f.write("#By changing the setting below to TRUE you are indicating your agreement to our EULA (https://account.mojang.com/documents/minecraft_eula).\n")
                 f.write("#Mon Jan 01 00:00:00 UTC 2024\n")
                 f.write("eula=false\n")
             logging.info(f"Created default EULA file for {servername}")
-            
-    except Exception as e:
-        logging.warning(f"Initial run failed for {servername}: {e}")
-        # Create EULA file anyway so the process can continue
+    except Exception:
+        # Keine internen Fehler an den Client
         eula_path = safe_server_path(servername, "eula.txt")
         try:
             with open(eula_path, "w") as f:
@@ -365,23 +358,19 @@ def create_server(
                 f.write("#Mon Jan 01 00:00:00 UTC 2024\n")
                 f.write("eula=false\n")
             logging.info(f"Created fallback EULA file for {servername}")
-        except Exception as fallback_error:
-            logging.error(f"Failed to create fallback EULA file for {servername}: {fallback_error}")
-    
+        except Exception:
+            pass
     # Versuche, den Server direkt zu starten (Backend-Lösung)
     try:
-        from fastapi import Request
-        # Starte den Server direkt nach Erstellung und EULA-Generierung
         start_result = start_server(servername, current_user)
         if isinstance(start_result, dict) and start_result.get("status") == "already running":
-            return {"message": "Server created and already running."}
+            return JSONResponse(content={"message": "Server created and already running."})
         elif isinstance(start_result, dict) and start_result.get("error"):
-            return {"message": "Server created, but failed to start: " + start_result["error"]}
+            return JSONResponse(content={"message": "Server created, but failed to start."})
         else:
-            return {"message": "Server created and started."}
-    except Exception as e:
-        # Falls Start fehlschlägt, trotzdem Erfolg für Erstellung melden
-        return {"message": f"Server created, but failed to start automatically: {e}. Please accept the EULA and start the server manually."}
+            return JSONResponse(content={"message": "Server created and started."})
+    except Exception:
+        return JSONResponse(content={"message": "Server created, but failed to start automatically. Please accept the EULA and start the server manually."})
 
 @router.post("/server/accept_eula")
 def accept_eula(servername: str = Form(...), current_user: dict = Depends(get_current_user)):
@@ -512,7 +501,8 @@ def upload_plugin(servername: str, file: UploadFile = File(...), current_user: d
     plugin_dir = safe_server_path(servername, "plugins")
     os.makedirs(plugin_dir, exist_ok=True)
     filename = os.path.basename(file.filename)
-    if not filename.endswith(".jar"):
+    # Path Traversal verhindern
+    if not filename.endswith(".jar") or '/' in filename or '\\' in filename:
         raise HTTPException(status_code=400, detail="Only .jar files allowed")
     dest = safe_server_path(servername, "plugins", filename)
     if os.path.exists(dest):
@@ -522,9 +512,15 @@ def upload_plugin(servername: str, file: UploadFile = File(...), current_user: d
             shutil.copyfileobj(file.file, tmp)
             tmp_path = tmp.name
         shutil.move(tmp_path, dest)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
-    return {"message": f"{filename} uploaded"}
+        # Setze Ausführberechtigung für Plugin (Linux/WSL)
+        try:
+            if os.name != "nt":
+                os.chmod(dest, 0o755)
+        except Exception as chmod_err:
+            logging.warning(f"chmod für Plugin fehlgeschlagen: {chmod_err}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Upload failed.")
+    return JSONResponse(content={"message": f"{filename} uploaded"})
 
 @router.get("/server/ram")
 def get_server_ram_config(servername: str, current_user: dict = Depends(get_current_user)):
