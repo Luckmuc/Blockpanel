@@ -1,2 +1,146 @@
 [19:04:51] [ServerMain/INFO]: [bootstrap] Running Java 21 (OpenJDK 64-Bit Server VM 21.0.7+6-LTS; Eclipse Adoptium Temurin-21.0.7+6) on Linux 6.6.87.1-microsoft-standard-WSL2 (amd64)
 [19:04:51] [ServerMain/INFO]: [bootstrap] Loading Purpur 1.21.5-2450-HEAD@61d7f55 (2025-06-17T05:07:48Z) for Minecraft 1.21.5
+[19:04:53] [ServerMain/INFO]: [PluginInitializerManager] Initializing plugins...
+[19:04:53] [ServerMain/INFO]: [PluginInitializerManager] Initialized 0 plugins
+[19:05:16] [ServerMain/INFO]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[19:05:25] [Yggdrasil Key Fetcher/ERROR]: Failed to request yggdrasil public key
+com.mojang.authlib.exceptions.MinecraftClientException: Failed to read from https://api.minecraftservices.com/publickeys due to api.minecraftservices.com
+	at com.mojang.authlib.minecraft.client.MinecraftClient.readInputStream(MinecraftClient.java:111) ~[authlib-6.0.58.jar:?]
+	at com.mojang.authlib.minecraft.client.MinecraftClient.get(MinecraftClient.java:56) ~[authlib-6.0.58.jar:?]
+	at com.mojang.authlib.yggdrasil.YggdrasilServicesKeyInfo.fetch(YggdrasilServicesKeyInfo.java:114) ~[authlib-6.0.58.jar:?]
+	at com.mojang.authlib.yggdrasil.YggdrasilServicesKeyInfo$1.run(YggdrasilServicesKeyInfo.java:89) ~[authlib-6.0.58.jar:?]
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:572) ~[?:?]
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317) ~[?:?]
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:304) ~[?:?]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) ~[?:?]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) ~[?:?]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[?:?]
+Caused by: java.net.UnknownHostException: api.minecraftservices.com
+	at java.base/sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:567) ~[?:?]
+	at java.base/java.net.SocksSocketImpl.connect(SocksSocketImpl.java:327) ~[?:?]
+	at java.base/java.net.Socket.connect(Socket.java:751) ~[?:?]
+	at java.base/sun.security.ssl.SSLSocketImpl.connect(SSLSocketImpl.java:304) ~[?:?]
+	at java.base/sun.net.NetworkClient.doConnect(NetworkClient.java:178) ~[?:?]
+	at java.base/sun.net.www.http.HttpClient.openServer(HttpClient.java:531) ~[?:?]
+	at java.base/sun.net.www.http.HttpClient.openServer(HttpClient.java:636) ~[?:?]
+	at java.base/sun.net.www.protocol.https.HttpsClient.<init>(HttpsClient.java:264) ~[?:?]
+	at java.base/sun.net.www.protocol.https.HttpsClient.New(HttpsClient.java:377) ~[?:?]
+	at java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.getNewHttpClient(AbstractDelegateHttpsURLConnection.java:193) ~[?:?]
+	at java.base/sun.net.www.protocol.http.HttpURLConnection.plainConnect0(HttpURLConnection.java:1297) ~[?:?]
+	at java.base/sun.net.www.protocol.http.HttpURLConnection.plainConnect(HttpURLConnection.java:1138) ~[?:?]
+	at java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.connect(AbstractDelegateHttpsURLConnection.java:179) ~[?:?]
+	at java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1690) ~[?:?]
+	at java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1614) ~[?:?]
+	at java.base/java.net.HttpURLConnection.getResponseCode(HttpURLConnection.java:531) ~[?:?]
+	at java.base/sun.net.www.protocol.https.HttpsURLConnectionImpl.getResponseCode(HttpsURLConnectionImpl.java:307) ~[?:?]
+	at com.mojang.authlib.minecraft.client.MinecraftClient.readInputStream(MinecraftClient.java:82) ~[authlib-6.0.58.jar:?]
+	... 9 more
+[19:05:38] [ServerMain/INFO]: Loaded 1373 recipes
+[19:05:38] [ServerMain/INFO]: Loaded 1484 advancements
+[19:05:40] [Server thread/INFO]: Starting minecraft server version 1.21.5
+[19:05:40] [Server thread/WARN]: ****************************
+[19:05:40] [Server thread/WARN]: YOU ARE RUNNING THIS SERVER AS AN ADMINISTRATIVE OR ROOT USER. THIS IS NOT ADVISED.
+[19:05:40] [Server thread/WARN]: YOU ARE OPENING YOURSELF UP TO POTENTIAL RISKS WHEN DOING THIS.
+[19:05:40] [Server thread/WARN]: FOR MORE INFORMATION, SEE https://madelinemiller.dev/blog/root-minecraft-server/
+[19:05:40] [Server thread/WARN]: ****************************
+[19:05:40] [Server thread/INFO]: Loading properties
+[19:05:43] [Server thread/INFO]: This server is running Purpur version 1.21.5-2450-HEAD@61d7f55 (2025-06-17T05:07:48Z) (Implementing API version 1.21.5-R0.1-SNAPSHOT)
+[19:05:47] [Server thread/INFO]: [spark] This server bundles the spark profiler. For more information please visit https://docs.papermc.io/paper/profiling
+[19:05:49] [Server thread/INFO]: Server Ping Player Sample Count: 12
+[19:05:49] [Server thread/INFO]: Using 4 threads for Netty based IO
+[19:05:54] [Server thread/INFO]: [MoonriseCommon] Paper is using 2 worker threads, 1 I/O threads
+[19:05:54] [Server thread/INFO]: [ChunkTaskScheduler] Chunk system is using population gen parallelism: true
+[19:06:06] [Server thread/INFO]: Default game type: SURVIVAL
+[19:06:06] [Server thread/INFO]: Generating keypair
+[19:06:06] [Server thread/INFO]: Starting Minecraft server on *:25565
+[19:06:09] [Server thread/INFO]: Using epoll channel type
+[19:06:10] [Server thread/INFO]: Paper: Using libdeflate (Linux x86_64) compression from Velocity.
+[19:06:10] [Server thread/INFO]: Paper: Using OpenSSL 3.x.x (Linux x86_64) cipher from Velocity.
+[19:06:11] [Server thread/INFO]: Server permissions file permissions.yml is empty, ignoring it
+[19:06:11] [Server thread/INFO]: Preparing level "world"
+[19:06:18] [Server thread/INFO]: Preparing start region for dimension minecraft:overworld
+[19:06:20] [Server thread/INFO]: Preparing spawn area: 0%
+[19:06:20] [Server thread/INFO]: Preparing spawn area: 0%
+[19:06:20] [Server thread/INFO]: Preparing spawn area: 0%
+[19:06:20] [Server thread/INFO]: Preparing spawn area: 0%
+[19:06:20] [Server thread/INFO]: Preparing spawn area: 0%
+[19:06:42] [Server thread/INFO]: Preparing spawn area: 0%
+[19:06:42] [Server thread/INFO]: Preparing spawn area: 0%
+[19:06:42] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:42] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:42] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:42] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:42] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:42] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:42] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:42] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:42] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:43] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:48] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:48] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:48] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:48] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:48] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:48] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:48] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:48] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:48] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:48] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:48] [Server thread/INFO]: Preparing spawn area: 2%
+[19:06:48] [Server thread/INFO]: Time elapsed: 13813 ms
+[19:06:48] [Server thread/INFO]: Preparing start region for dimension minecraft:the_nether
+[19:06:48] [Server thread/INFO]: Preparing spawn area: 0%
+[19:06:49] [Server thread/INFO]: Preparing spawn area: 10%
+[19:06:49] [Server thread/INFO]: Preparing spawn area: 95%
+[19:06:49] [Server thread/INFO]: Time elapsed: 1017 ms
+[19:06:49] [Server thread/INFO]: Preparing start region for dimension minecraft:the_end
+[19:06:50] [Server thread/INFO]: Preparing spawn area: 0%
+[19:06:50] [Server thread/INFO]: Preparing spawn area: 8%
+[19:06:51] [Server thread/INFO]: Preparing spawn area: 22%
+[19:06:51] [Server thread/INFO]: Preparing spawn area: 22%
+[19:06:51] [Server thread/INFO]: Time elapsed: 1789 ms
+[19:06:53] [Server thread/INFO]: [spark] Starting background profiler...
+[19:06:59] [Server thread/INFO]: Done preparing level "world" (31.885s)
+[19:07:00] [Server thread/INFO]: Running delayed init tasks
+[19:07:00] [Server thread/INFO]: Done (135.051s)! For help, type "help"
+[19:10:09] [User Authenticator #0/INFO]: UUID of player Luckmuc is 5d743127-f36c-4f5c-b375-c07a0f2bf77f
+[19:10:12] [Server thread/INFO]: Luckmuc joined the game
+[19:10:12] [Server thread/INFO]: Luckmuc[/172.18.0.1:40624] logged in with entity id 20 at ([world]6.5, 69.0, -2.5)
+[19:10:21] [Server thread/WARN]: Ignoring chat session from Luckmuc due to missing Services public key
+[19:10:21] [Server thread/WARN]: Can't keep up! Is the server overloaded? Running 2502ms or 50 ticks behind
+[19:10:40] [Server thread/WARN]: Can't keep up! Is the server overloaded? Running 3056ms or 61 ticks behind
+[19:11:01] [Yggdrasil Key Fetcher/ERROR]: Failed to request yggdrasil public key
+com.mojang.authlib.exceptions.MinecraftClientException: Failed to read from https://api.minecraftservices.com/publickeys due to Connect timed out
+	at com.mojang.authlib.minecraft.client.MinecraftClient.readInputStream(MinecraftClient.java:111) ~[authlib-6.0.58.jar:?]
+	at com.mojang.authlib.minecraft.client.MinecraftClient.get(MinecraftClient.java:56) ~[authlib-6.0.58.jar:?]
+	at com.mojang.authlib.yggdrasil.YggdrasilServicesKeyInfo.fetch(YggdrasilServicesKeyInfo.java:114) ~[authlib-6.0.58.jar:?]
+	at com.mojang.authlib.yggdrasil.YggdrasilServicesKeyInfo$1.run(YggdrasilServicesKeyInfo.java:89) ~[authlib-6.0.58.jar:?]
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:572) ~[?:?]
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317) ~[?:?]
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:304) ~[?:?]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) ~[?:?]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) ~[?:?]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[?:?]
+Caused by: java.net.SocketTimeoutException: Connect timed out
+	at java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(NioSocketImpl.java:546) ~[?:?]
+	at java.base/sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:592) ~[?:?]
+	at java.base/java.net.SocksSocketImpl.connect(SocksSocketImpl.java:327) ~[?:?]
+	at java.base/java.net.Socket.connect(Socket.java:751) ~[?:?]
+	at java.base/sun.security.ssl.SSLSocketImpl.connect(SSLSocketImpl.java:304) ~[?:?]
+	at java.base/sun.net.NetworkClient.doConnect(NetworkClient.java:178) ~[?:?]
+	at java.base/sun.net.www.http.HttpClient.openServer(HttpClient.java:531) ~[?:?]
+	at java.base/sun.net.www.http.HttpClient.openServer(HttpClient.java:636) ~[?:?]
+	at java.base/sun.net.www.protocol.https.HttpsClient.<init>(HttpsClient.java:264) ~[?:?]
+	at java.base/sun.net.www.protocol.https.HttpsClient.New(HttpsClient.java:377) ~[?:?]
+	at java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.getNewHttpClient(AbstractDelegateHttpsURLConnection.java:193) ~[?:?]
+	at java.base/sun.net.www.protocol.http.HttpURLConnection.plainConnect0(HttpURLConnection.java:1297) ~[?:?]
+	at java.base/sun.net.www.protocol.http.HttpURLConnection.plainConnect(HttpURLConnection.java:1138) ~[?:?]
+	at java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.connect(AbstractDelegateHttpsURLConnection.java:179) ~[?:?]
+	at java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1690) ~[?:?]
+	at java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1614) ~[?:?]
+	at java.base/java.net.HttpURLConnection.getResponseCode(HttpURLConnection.java:531) ~[?:?]
+	at java.base/sun.net.www.protocol.https.HttpsURLConnectionImpl.getResponseCode(HttpsURLConnectionImpl.java:307) ~[?:?]
+	at com.mojang.authlib.minecraft.client.MinecraftClient.readInputStream(MinecraftClient.java:82) ~[authlib-6.0.58.jar:?]
+	... 9 more
+[19:11:03] [Server thread/WARN]: Can't keep up! Is the server overloaded? Running 2651ms or 53 ticks behind
+[19:11:16] [Server thread/INFO]: Luckmuc was slain by Zombie
