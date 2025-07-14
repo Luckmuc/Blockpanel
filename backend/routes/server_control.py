@@ -18,28 +18,24 @@ router = APIRouter()
 
 @router.get("/server/stats")
 def server_stats(servername: str, current_user: dict = Depends(get_current_user)):
-    # RAM allocation (from config)
     import time
     import locale as pylocale
     ram_allocated = get_server_ram(servername)
-    # RAM usage (from process)
     pid = get_server_proc(servername)
     ram_used = None
     uptime = None
     if pid:
         try:
             p = psutil.Process(pid)
-            ram_used = int(p.memory_info().rss / 1024 / 1024)  # MB
-            uptime = int(time.time() - p.create_time())  # seconds
+            ram_used = int(p.memory_info().rss / 1024 / 1024)
+            uptime = int(time.time() - p.create_time())
         except Exception:
             ram_used = None
             uptime = None
-    # Plugins
     plugin_dir = safe_server_path(servername, "plugins")
     plugins = []
     if os.path.exists(plugin_dir):
         plugins = [f for f in os.listdir(plugin_dir) if f.endswith(".jar")]
-    # Properties
     prop_path = safe_server_path(servername, "server.properties")
     props = {}
     if os.path.exists(prop_path):
@@ -48,21 +44,32 @@ def server_stats(servername: str, current_user: dict = Depends(get_current_user)
                 if "=" in line and not line.strip().startswith("#"):
                     k, v = line.strip().split("=", 1)
                     props[k] = v
-    # Player count (try to get from properties or logs)
     max_players = props.get("max-players")
     online_players = None
-    # Try to parse from latest.log
     log_path = safe_server_path(servername, "logs", "latest.log")
-    # Fallback: if logs/latest.log does not exist, use server.log
     if not os.path.exists(log_path):
         log_path = safe_server_path(servername, "server.log")
+    # Version aus Log extrahieren
+    server_version = None
+    if os.path.exists(log_path):
+        try:
+            with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.readlines()[-200:]
+            for line in lines:
+                if "Starting minecraft server version" in line:
+                    m = re.search(r"Starting minecraft server version ([^\s]+)", line)
+                    if m:
+                        server_version = m.group(1)
+                        break
+        except Exception:
+            pass
+    # Player count aus Log
     if os.path.exists(log_path):
         try:
             with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
                 lines = f.readlines()[-100:]
             for line in reversed(lines):
                 if "There are" in line and "of a max of" in line:
-                    import re
                     m = re.search(r"There are (\d+)/(\d+) players", line)
                     if m:
                         online_players = int(m.group(1))
@@ -70,18 +77,26 @@ def server_stats(servername: str, current_user: dict = Depends(get_current_user)
                         break
         except Exception:
             pass
-    # IP/Port
     port = props.get("server-port", "25565")
     address = f"{socket.gethostbyname(socket.gethostname())}:{port}"
-    # Locale
     locale = props.get("language", pylocale.getdefaultlocale()[0] or "en_US")
-    # Uptime (already calculated)
-    # Logs (last 30 lines)
-    logs = []
-    if os.path.exists(log_path):
-        with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
-            logs = f.readlines()[-30:]
-    # Web link (address)
+    # Live-Log aus tmux, falls Session läuft
+    live_log = None
+    session = get_tmux_session(servername)
+    try:
+        # capture-pane gibt den aktuellen Output der tmux-Konsole
+        out = subprocess.check_output(["tmux", "capture-pane", "-t", session, "-p"], cwd=safe_server_path(servername))
+        live_log = out.decode(errors="ignore")
+    except Exception:
+        # Fallback: Logdatei
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                    live_log = "".join(f.readlines()[-30:])
+            except Exception:
+                live_log = ""
+        else:
+            live_log = ""
     web_link = f"http://{address}"
     return {
         "ram_allocated": ram_allocated,
@@ -93,7 +108,8 @@ def server_stats(servername: str, current_user: dict = Depends(get_current_user)
         "address": address,
         "port": port,
         "locale": locale,
-        "logs": "".join(logs),
+        "version": server_version,
+        "logs": live_log,
         "web_link": web_link
     }
 
