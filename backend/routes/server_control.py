@@ -204,8 +204,19 @@ def save_server_config(servername: str, ram: str):
 
 @router.post("/server/start")
 def start_server(servername: str, current_user: dict = Depends(get_current_user)):
+    # Prevent multiple servers from starting at once
+    lock_file = safe_server_path(servername, "start.lock")
+    if os.path.exists(lock_file):
+        logging.warning(f"Start lock exists for {servername}, aborting start.")
+        return {"status": "already starting"}
     if get_server_proc(servername):
         return {"status": "already running"}
+    try:
+        with open(lock_file, "w") as f:
+            f.write("locked")
+    except Exception as e:
+        logging.error(f"Could not create start lock for {servername}: {e}")
+        return JSONResponse(status_code=500, content={"error": "Could not create start lock."})
     jar_path = safe_server_path(servername, "purpur.jar")
     base_path = safe_server_path(servername)
     pid_file = get_pid_file(servername)
@@ -222,6 +233,8 @@ def start_server(servername: str, current_user: dict = Depends(get_current_user)
         ], cwd=base_path, capture_output=True, text=True)
         if result.returncode != 0:
             logging.error(f"tmux/java Fehler (rc={result.returncode}):\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
+            if os.path.exists(lock_file):
+                os.remove(lock_file)
             return JSONResponse(status_code=500, content={"error": f"tmux/java Fehler: {result.stderr}"})
         out = subprocess.check_output([
             "tmux", "list-panes", "-t", session, "-F", "#{pane_pid}"
@@ -234,6 +247,9 @@ def start_server(servername: str, current_user: dict = Depends(get_current_user)
     except Exception as e:
         logging.error(f"Fehler beim Starten von {servername}: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+    finally:
+        if os.path.exists(lock_file):
+            os.remove(lock_file)
 # Health-Check-Endpoint - erfordert Authentifizierung
 @router.get("/system/health")
 def system_health(current_user: dict = Depends(get_current_user)):
