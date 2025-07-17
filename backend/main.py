@@ -1,4 +1,10 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Form
+from auth import get_current_user
+app = FastAPI()
+# Endpoint to validate token and get current user
+@app.get("/me")
+def me(current_user: dict = Depends(get_current_user)):
+    return {"username": current_user["username"]}
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware

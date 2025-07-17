@@ -1,0 +1,53 @@
+[18:43:17] [ServerMain/INFO]: [bootstrap] Running Java 21 (OpenJDK 64-Bit Server VM 21.0.7+6-LTS; Eclipse Adoptium Temurin-21.0.7+6) on Linux 6.6.87.1-microsoft-standard-WSL2 (amd64)
+[18:43:17] [ServerMain/INFO]: [bootstrap] Loading Purpur 1.21.5-2450-HEAD@61d7f55 (2025-06-17T05:07:48Z) for Minecraft 1.21.5
+[18:43:19] [ServerMain/INFO]: [PluginInitializerManager] Initializing plugins...
+[18:43:19] [ServerMain/INFO]: [PluginInitializerManager] Initialized 0 plugins
+[18:43:55] [ServerMain/INFO]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[18:44:32] [ServerMain/INFO]: Loaded 1373 recipes
+[18:44:32] [ServerMain/INFO]: Loaded 1484 advancements
+[18:44:35] [Server thread/INFO]: Starting minecraft server version 1.21.5
+[18:44:35] [Server thread/WARN]: ****************************
+[18:44:35] [Server thread/WARN]: YOU ARE RUNNING THIS SERVER AS AN ADMINISTRATIVE OR ROOT USER. THIS IS NOT ADVISED.
+[18:44:35] [Server thread/WARN]: YOU ARE OPENING YOURSELF UP TO POTENTIAL RISKS WHEN DOING THIS.
+[18:44:35] [Server thread/WARN]: FOR MORE INFORMATION, SEE https://madelinemiller.dev/blog/root-minecraft-server/
+[18:44:35] [Server thread/WARN]: ****************************
+[18:44:35] [Server thread/INFO]: Loading properties
+[18:44:38] [Server thread/INFO]: This server is running Purpur version 1.21.5-2450-HEAD@61d7f55 (2025-06-17T05:07:48Z) (Implementing API version 1.21.5-R0.1-SNAPSHOT)
+[18:44:41] [Server thread/INFO]: [spark] This server bundles the spark profiler. For more information please visit https://docs.papermc.io/paper/profiling
+[18:44:42] [Server thread/INFO]: Server Ping Player Sample Count: 12
+[18:44:42] [Server thread/INFO]: Using 4 threads for Netty based IO
+[18:44:47] [Server thread/INFO]: [MoonriseCommon] Paper is using 2 worker threads, 1 I/O threads
+[18:44:47] [Server thread/INFO]: [ChunkTaskScheduler] Chunk system is using population gen parallelism: true
+[18:44:53] [Server thread/INFO]: Default game type: SURVIVAL
+[18:44:53] [Server thread/INFO]: Generating keypair
+[18:44:54] [Server thread/INFO]: Starting Minecraft server on *:25565
+[18:44:55] [Server thread/INFO]: Using epoll channel type
+[18:44:55] [Server thread/INFO]: Paper: Using libdeflate (Linux x86_64) compression from Velocity.
+[18:44:55] [Server thread/INFO]: Paper: Using OpenSSL 3.x.x (Linux x86_64) cipher from Velocity.
+[18:44:56] [Server thread/INFO]: Server permissions file permissions.yml is empty, ignoring it
+[18:44:56] [Server thread/INFO]: Preparing level "world"
+[18:45:06] [Server thread/INFO]: Preparing start region for dimension minecraft:overworld
+[18:45:08] [Server thread/INFO]: Preparing spawn area: 0%
+[18:45:08] [Server thread/INFO]: Preparing spawn area: 0%
+[18:45:08] [Server thread/INFO]: Preparing spawn area: 0%
+[18:45:08] [Server thread/INFO]: Preparing spawn area: 0%
+[18:45:08] [Server thread/INFO]: Preparing spawn area: 0%
+[18:45:09] [Server thread/INFO]: Preparing spawn area: 0%
+[18:45:09] [Server thread/INFO]: Preparing spawn area: 0%
+[18:45:11] [Server thread/INFO]: Preparing spawn area: 2%
+[18:45:11] [Server thread/INFO]: Preparing spawn area: 2%
+[18:45:11] [Server thread/INFO]: Preparing spawn area: 2%
+[18:45:11] [Server thread/INFO]: Preparing spawn area: 2%
+[18:45:11] [Server thread/INFO]: Time elapsed: 5376 ms
+[18:45:11] [Server thread/INFO]: Preparing start region for dimension minecraft:the_nether
+[18:45:12] [Server thread/INFO]: Preparing spawn area: 0%
+[18:45:12] [Server thread/INFO]: Preparing spawn area: 51%
+[18:45:12] [Server thread/INFO]: Time elapsed: 759 ms
+[18:45:12] [Server thread/INFO]: Preparing start region for dimension minecraft:the_end
+[18:45:12] [Server thread/INFO]: Preparing spawn area: 0%
+[18:45:13] [Server thread/INFO]: Preparing spawn area: 20%
+[18:45:13] [Server thread/INFO]: Time elapsed: 619 ms
+[18:45:13] [Server thread/INFO]: [spark] Starting background profiler...
+[18:45:14] [Server thread/INFO]: Done preparing level "world" (18.121s)
+[18:45:14] [Server thread/INFO]: Running delayed init tasks
+[18:45:14] [Server thread/INFO]: Done (124.221s)! For help, type "help"
