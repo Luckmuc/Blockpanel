@@ -46,3 +46,27 @@ Traceback (most recent call last):
               ^^^^^^^^^^^^^^^^^
 AttributeError: module 'bcrypt' has no attribute '__about__'
 2025-07-17 18:43:00,033 INFO Server Testserver gestartet (PID 13)
+2025-07-17 19:01:54,415 WARNING (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-07-17 19:09:49,090 WARNING (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-07-18 17:46:24,228 WARNING (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-07-19 18:29:52,759 WARNING (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
