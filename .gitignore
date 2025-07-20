@@ -2,3 +2,4 @@ echo "node_modules/" >> .gitignore
 echo ".next/" >> .gitignore
 echo "dist/" >> .gitignore
 echo ".env" >> .gitignore
+node_modules
