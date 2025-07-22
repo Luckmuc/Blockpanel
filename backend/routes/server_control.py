@@ -44,8 +44,12 @@ def server_stats(servername: str, current_user: dict = Depends(get_current_user)
                 if "=" in line and not line.strip().startswith("#"):
                     k, v = line.strip().split("=", 1)
                     props[k] = v
-    max_players = props.get("max-players")
-    online_players = None
+    max_players = 0
+    if "max-players" in props:
+        try:
+            max_players = int(props["max-players"])
+        except Exception:
+            max_players = 0
     log_path = safe_server_path(servername, "logs", "latest.log")
     if not os.path.exists(log_path):
         log_path = safe_server_path(servername, "server.log")
@@ -63,20 +67,26 @@ def server_stats(servername: str, current_user: dict = Depends(get_current_user)
                         break
         except Exception:
             pass
-    # Player count aus Log
+    # Player count aus Log: joined/left the game
+    online_players = 0
     if os.path.exists(log_path):
         try:
+            import re
+            player_set = set()
             with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
-                lines = f.readlines()[-100:]
-            for line in reversed(lines):
-                if "There are" in line and "of a max of" in line:
-                    m = re.search(r"There are (\d+)/(\d+) players", line)
-                    if m:
-                        online_players = int(m.group(1))
-                        max_players = m.group(2)
-                        break
+                lines = f.readlines()[-500:]
+            for line in lines:
+                # joined
+                m = re.search(r"INFO\]: (?:\\u001b\[[^m]+m)?([A-Za-z0-9_]+) joined the game", line)
+                if m:
+                    player_set.add(m.group(1))
+                # left
+                m2 = re.search(r"INFO\]: (?:\\u001b\[[^m]+m)?([A-Za-z0-9_]+) left the game", line)
+                if m2:
+                    player_set.discard(m2.group(1))
+            online_players = len(player_set)
         except Exception:
-            pass
+            online_players = 0
     port = props.get("server-port", "25565")
     address = f"{socket.gethostbyname(socket.gethostname())}:{port}"
     locale = props.get("language", pylocale.getdefaultlocale()[0] or "en_US")
@@ -113,6 +123,58 @@ def server_stats(servername: str, current_user: dict = Depends(get_current_user)
         "web_link": web_link
     }
 
+@router.get("/server/playercount")
+def get_player_count(servername: str, current_user: dict = Depends(get_current_user)):
+    log_path = safe_server_path(servername, "logs", "latest.log")
+    if not os.path.exists(log_path):
+        log_path = safe_server_path(servername, "server.log")
+    # max_players aus server.properties
+    prop_path = safe_server_path(servername, "server.properties")
+    max_players = 0
+    if os.path.exists(prop_path):
+        with open(prop_path, "r") as f:
+            for line in f:
+                if line.strip().startswith("max-players="):
+                    try:
+                        max_players = int(line.strip().split("=", 1)[1])
+                    except Exception:
+                        max_players = 0
+                    break
+    player_set = set()
+    if os.path.exists(log_path):
+        try:
+            import re
+            with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.readlines()[-500:]
+            for line in lines:
+                m = re.search(r"INFO\]: (?:\\u001b\[[^m]+m)?([A-Za-z0-9_]+) joined the game", line)
+                if m:
+                    player_set.add(m.group(1))
+                m2 = re.search(r"INFO\]: (?:\\u001b\[[^m]+m)?([A-Za-z0-9_]+) left the game", line)
+                if m2:
+                    player_set.discard(m2.group(1))
+        except Exception:
+            pass
+    player_count = len(player_set)
+    return {"player_count": player_count, "max_players": max_players}
+
+@router.get("/server/players")
+def get_players(servername: str, current_user: dict = Depends(get_current_user)):
+    usercache_path = safe_server_path(servername, "usercache.json")
+    players = []
+    if os.path.exists(usercache_path):
+        try:
+            import json
+            with open(usercache_path, "r", encoding="utf-8", errors="ignore") as f:
+                data = json.load(f)
+            for entry in data:
+                name = entry.get("name")
+                uuid = entry.get("uuid")
+                if name and uuid:
+                    players.append({"name": name, "uuid": uuid})
+        except Exception:
+            pass
+    return {"players": players}
 
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, BackgroundTasks, Form
 import subprocess
@@ -205,6 +267,7 @@ def save_server_config(servername: str, ram: str):
 @router.post("/server/start")
 def start_server(servername: str, current_user: dict = Depends(get_current_user)):
     # Prevent multiple servers from starting at once
+    import time
     lock_file = safe_server_path(servername, "start.lock")
     if os.path.exists(lock_file):
         logging.warning(f"Start lock exists for {servername}, aborting start.")
@@ -243,7 +306,39 @@ def start_server(servername: str, current_user: dict = Depends(get_current_user)
         with open(pid_file, "w") as f:
             f.write(str(pid))
         logging.info(f"Server {servername} gestartet (PID {pid})")
-        return {"status": "started"}
+
+        # Warte auf das letzte "Done" im Log (max 60s)
+        done_found = False
+        done_count = 0
+        max_wait = 60
+        waited = 0
+        last_done_line = -1
+        while waited < max_wait:
+            if not os.path.exists(log_file):
+                time.sleep(1)
+                waited += 1
+                continue
+            with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.readlines()
+            # Suche alle Zeilen mit "Done ("
+            done_lines = [i for i, line in enumerate(lines) if "Done (" in line]
+            if done_lines:
+                # Wenn es neue "Done"-Zeilen gibt, merke dir die letzte
+                if last_done_line != done_lines[-1]:
+                    last_done_line = done_lines[-1]
+                    done_count = len(done_lines)
+                # Prüfe, ob nach dem letzten "Done" noch weitere Server-Output-Zeilen kamen (z.B. "You can now connect")
+                # oder ob der Server wirklich bereit ist (optional: weitere Checks)
+                # Wir nehmen an: Wenn "Done (" das letzte relevante ist, ist der Server bereit
+                done_found = True
+                break
+            time.sleep(1)
+            waited += 1
+        if done_found:
+            status = "started"
+        else:
+            status = "booting"  # Timeout, aber Prozess läuft
+        return {"status": status}
     except Exception as e:
         logging.error(f"Fehler beim Starten von {servername}: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -505,6 +600,29 @@ def list_plugins(servername: str, current_user: dict = Depends(get_current_user)
         return {"plugins": []}
     return {"plugins": [f for f in os.listdir(plugin_dir) if f.endswith(".jar")]}
 
+# API: Server-Version abrufen
+@router.get("/server/version")
+def get_server_version(servername: str, current_user: dict = Depends(get_current_user)):
+    log_path = safe_server_path(servername, "logs", "latest.log")
+    if not os.path.exists(log_path):
+        log_path = safe_server_path(servername, "server.log")
+    version = None
+    if os.path.exists(log_path):
+        try:
+            with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.readlines()[-200:]
+            for line in lines:
+                if "Starting minecraft server version" in line:
+                    m = re.search(r"Starting minecraft server version ([^\s]+)", line)
+                    if m:
+                        version = m.group(1)
+                        # Purpur-Variante
+                        if "Purpur" in line:
+                            version += " Purpur"
+                        break
+        except Exception:
+            pass
+    return {"version": version}
 @router.delete("/server/plugins/delete")
 def delete_plugin(servername: str, plugin: str, current_user: dict = Depends(get_current_user)):
     plugin_path = safe_server_path(servername, "plugins", plugin)
