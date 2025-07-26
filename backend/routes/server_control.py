@@ -1,20 +1,90 @@
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, BackgroundTasks, Form
+from auth import get_current_user
 import subprocess
 import os
 from fastapi.responses import JSONResponse
 import glob
 import psutil
+import requests
+import shutil
+import re
+
+router = APIRouter()
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, BackgroundTasks, Form
 from auth import get_current_user
+import subprocess
+import os
+from fastapi.responses import JSONResponse
+import glob
+import psutil
+import requests
+import shutil
+import re
+
+
+
+@router.get("/server/uptime")
+def get_server_uptime(servername: str, current_user: dict = Depends(get_current_user)):
+    """Get the uptime (in seconds) for a running server."""
+    pid = get_server_proc(servername)
+    if not pid:
+        return {"uptime": 0}
+    try:
+        p = psutil.Process(pid)
+        uptime = int((__import__('time').time() - p.create_time()))
+        return {"uptime": uptime}
+    except Exception as e:
+        return {"uptime": 0, "error": str(e)}
+
+@router.get("/server/tmux")
+def get_tmux_output(servername: str, current_user: dict = Depends(get_current_user)):
+    """Get the tmux session output for a server."""
+    session = get_tmux_session(servername)
+    try:
+        out = subprocess.check_output(["tmux", "capture-pane", "-t", session, "-p"], cwd=safe_server_path(servername))
+        return {"output": out.decode(errors="ignore")}
+    except Exception as e:
+        return {"output": f"Error: {str(e)}"}
+@router.get("/server/portcheck")
+def check_server_port(servername: str, current_user: dict = Depends(get_current_user)):
+    """
+    Prüft, ob der Minecraft-Server-Port erreichbar ist (TCP connect).
+    """
+    import time
+    prop_path = safe_server_path(servername, "server.properties")
+    port = 25565
+    if os.path.exists(prop_path):
+        with open(prop_path, "r") as f:
+            for line in f:
+                if line.strip().startswith("server-port="):
+                    try:
+                        port = int(line.strip().split("=", 1)[1])
+                    except Exception:
+                        port = 25565
+                    break
+    # Versuche, den Port zu erreichen (localhost und 0.0.0.0)
+    result = False
+    for host in ["127.0.0.1", "0.0.0.0"]:
+        try:
+            with socket.create_connection((host, port), timeout=1):
+                result = True
+                break
+        except Exception:
+            continue
+    return {"open": result, "port": port}
+import subprocess
+import os
+from fastapi.responses import JSONResponse
+import glob
+import psutil
 import requests
 import shutil
 import re
 import socket
 import tempfile
-import shutil
-import subprocess
 import logging
 
-router = APIRouter()
+
 
 @router.get("/server/stats")
 def server_stats(servername: str, current_user: dict = Depends(get_current_user)):
@@ -89,16 +159,13 @@ def server_stats(servername: str, current_user: dict = Depends(get_current_user)
             online_players = 0
     port = props.get("server-port", "25565")
     address = f"{socket.gethostbyname(socket.gethostname())}:{port}"
-    locale = props.get("language", pylocale.getdefaultlocale()[0] or "en_US")
     # Live-Log aus tmux, falls Session läuft
     live_log = None
     session = get_tmux_session(servername)
     try:
-        # capture-pane gibt den aktuellen Output der tmux-Konsole
         out = subprocess.check_output(["tmux", "capture-pane", "-t", session, "-p"], cwd=safe_server_path(servername))
         live_log = out.decode(errors="ignore")
     except Exception:
-        # Fallback: Logdatei
         if os.path.exists(log_path):
             try:
                 with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -107,7 +174,6 @@ def server_stats(servername: str, current_user: dict = Depends(get_current_user)
                 live_log = ""
         else:
             live_log = ""
-    web_link = f"http://{address}"
     return {
         "ram_allocated": ram_allocated,
         "ram_used": ram_used,
@@ -117,10 +183,7 @@ def server_stats(servername: str, current_user: dict = Depends(get_current_user)
         "max_players": max_players,
         "address": address,
         "port": port,
-        "locale": locale,
-        "version": server_version,
-        "logs": live_log,
-        "web_link": web_link
+        "logs": live_log
     }
 
 @router.get("/server/playercount")
@@ -176,20 +239,16 @@ def get_players(servername: str, current_user: dict = Depends(get_current_user))
             pass
     return {"players": players}
 
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, BackgroundTasks, Form
 import subprocess
 import os
 from fastapi.responses import JSONResponse
 import glob
 import psutil
-from auth import get_current_user
 import requests
 import shutil
 import re
 import socket
 import tempfile
-import shutil
-import subprocess
 import logging
 
 def get_pid_file(servername: str):
@@ -236,7 +295,7 @@ logging.basicConfig(
     ]
 )
 
-router = APIRouter()
+
 
 def get_tmux_session(servername: str):
     return f"mc_{servername}"
