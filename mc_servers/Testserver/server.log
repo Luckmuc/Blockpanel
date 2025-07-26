@@ -1,53 +1,20 @@
 Starting org.bukkit.craftbukkit.Main
-2025-07-22T17:17:01.885235693Z ServerMain WARN Advanced terminal features are not available in this environment
-[17:17:03 INFO]: [bootstrap] Running Java 21 (OpenJDK 64-Bit Server VM 21.0.8+9-LTS; Eclipse Adoptium Temurin-21.0.8+9) on Linux 6.6.87.1-microsoft-standard-WSL2 (amd64)
-[17:17:03 INFO]: [bootstrap] Loading Purpur 1.21.5-2450-HEAD@61d7f55 (2025-06-17T05:07:48Z) for Minecraft 1.21.5
-[17:17:04 INFO]: [PluginInitializerManager] Initializing plugins...
-[17:17:06 INFO]: [PluginInitializerManager] Initialized 1 plugin
-[17:17:06 INFO]: [PluginInitializerManager] Bukkit plugins (1):
+2025-07-26T17:15:53.872198183Z ServerMain WARN Advanced terminal features are not available in this environment
+[17:15:55 INFO]: [bootstrap] Running Java 21 (OpenJDK 64-Bit Server VM 21.0.8+9-LTS; Eclipse Adoptium Temurin-21.0.8+9) on Linux 6.6.87.1-microsoft-standard-WSL2 (amd64)
+[17:15:55 INFO]: [bootstrap] Loading Purpur 1.21.5-2450-HEAD@61d7f55 (2025-06-17T05:07:48Z) for Minecraft 1.21.5
+[17:15:56 INFO]: [PluginInitializerManager] Initializing plugins...
+[17:15:57 INFO]: [PluginInitializerManager] Initialized 1 plugin
+[17:15:57 INFO]: [PluginInitializerManager] Bukkit plugins (1):
  - BackpackPlugin (1.0-SNAPSHOT)
-[17:17:21 INFO]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
-[17:17:37 INFO]: Loaded 1373 recipes
-[17:17:37 INFO]: Loaded 1484 advancements
-[17:17:37 INFO]: Starting minecraft server version 1.21.5
-[17:17:37 WARN]: ****************************
-[17:17:37 WARN]: YOU ARE RUNNING THIS SERVER AS AN ADMINISTRATIVE OR ROOT USER. THIS IS NOT ADVISED.
-[17:17:37 WARN]: YOU ARE OPENING YOURSELF UP TO POTENTIAL RISKS WHEN DOING THIS.
-[17:17:37 WARN]: FOR MORE INFORMATION, SEE https://madelinemiller.dev/blog/root-minecraft-server/
-[17:17:37 WARN]: ****************************
-[17:17:37 INFO]: Loading properties
-[17:17:38 INFO]: This server is running Purpur version 1.21.5-2450-HEAD@61d7f55 (2025-06-17T05:07:48Z) (Implementing API version 1.21.5-R0.1-SNAPSHOT)
-[17:17:38 INFO]: [spark] This server bundles the spark profiler. For more information please visit https://docs.papermc.io/paper/profiling
-[17:17:39 INFO]: Server Ping Player Sample Count: 12
-[17:17:39 INFO]: Using 4 threads for Netty based IO
-[17:17:41 INFO]: [MoonriseCommon] Paper is using 2 worker threads, 1 I/O threads
-[17:17:41 INFO]: [ChunkTaskScheduler] Chunk system is using population gen parallelism: true
-[17:17:43 INFO]: Default game type: SURVIVAL
-[17:17:43 INFO]: Generating keypair
-[17:17:43 INFO]: Starting Minecraft server on *:25565
-[17:17:44 INFO]: Using epoll channel type
-[17:17:44 INFO]: Paper: Using libdeflate (Linux x86_64) compression from Velocity.
-[17:17:44 INFO]: Paper: Using OpenSSL 3.x.x (Linux x86_64) cipher from Velocity.
-[17:17:45 INFO]: [BackpackPlugin] Loading server plugin BackpackPlugin v1.0-SNAPSHOT
-[17:17:45 INFO]: Server permissions file permissions.yml is empty, ignoring it
-[17:17:45 INFO]: Preparing level "world"
-[17:17:47 INFO]: Preparing start region for dimension minecraft:overworld
-[17:17:48 INFO]: Preparing spawn area: 0%
-[17:17:48 INFO]: Preparing spawn area: 0%
-[17:17:48 INFO]: Preparing spawn area: 0%
-[17:17:50 INFO]: Preparing spawn area: 2%
-[17:17:50 INFO]: Preparing spawn area: 2%
-[17:17:50 INFO]: Time elapsed: 2442 ms
-[17:17:50 INFO]: Preparing start region for dimension minecraft:the_nether
-[17:17:50 INFO]: Preparing spawn area: 0%
-[17:17:50 INFO]: Preparing spawn area: 16%
-[17:17:50 INFO]: Time elapsed: 637 ms
-[17:17:50 INFO]: Preparing start region for dimension minecraft:the_end
-[17:17:50 INFO]: Preparing spawn area: 0%
-[17:17:51 INFO]: Time elapsed: 356 ms
-[17:17:51 INFO]: [BackpackPlugin] Enabling BackpackPlugin v1.0-SNAPSHOT
-[17:17:51 INFO]: [BackpackPlugin] BackpackPlugin wurde erfolgreich geladen!
-[17:17:51 INFO]: [spark] Starting background profiler...
-[17:17:52 INFO]: Done preparing level "world" (7.281s)
-[17:17:52 INFO]: Running delayed init tasks
-[17:17:52 INFO]: Done (54.143s)! For help, type "help"
+[17:16:11 INFO]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[17:16:25 INFO]: Loaded 1373 recipes
+[17:16:25 INFO]: Loaded 1484 advancements
+[17:16:25 INFO]: Starting minecraft server version 1.21.5
+[17:16:25 WARN]: ****************************
+[17:16:25 WARN]: YOU ARE RUNNING THIS SERVER AS AN ADMINISTRATIVE OR ROOT USER. THIS IS NOT ADVISED.
+[17:16:25 WARN]: YOU ARE OPENING YOURSELF UP TO POTENTIAL RISKS WHEN DOING THIS.
+[17:16:25 WARN]: FOR MORE INFORMATION, SEE https://madelinemiller.dev/blog/root-minecraft-server/
+[17:16:25 WARN]: ****************************
+[17:16:25 INFO]: Loading properties
+[17:16:26 INFO]: This server is running Purpur version 1.21.5-2450-HEAD@61d7f55 (2025-06-17T05:07:48Z) (Implementing API version 1.21.5-R0.1-SNAPSHOT)
+[17:16:26 INFO]: [spark] This server bundles the spark profiler. For more information please visit https://docs.papermc.io/paper/profiling
