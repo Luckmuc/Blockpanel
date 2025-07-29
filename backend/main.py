@@ -43,13 +43,14 @@ async def add_security_headers(request: Request, call_next):
     return response
 
 # Trusted Host Middleware
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "*.localhost"])
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
 origins = [
     "http://localhost",
     "http://localhost:3000",
     "http://localhost:5173",
-    "http://localhost:1105",  # <-- Füge das hinzu!
+    "http://localhost:1105",
+    "*",
 ]
 
 app.add_middleware(
