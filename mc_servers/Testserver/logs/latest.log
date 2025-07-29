@@ -1,51 +1,49 @@
-[15:21:12] [ServerMain/INFO]: [bootstrap] Running Java 21 (OpenJDK 64-Bit Server VM 21.0.8+9-LTS; Eclipse Adoptium Temurin-21.0.8+9) on Linux 6.6.87.1-microsoft-standard-WSL2 (amd64)
-[15:21:12] [ServerMain/INFO]: [bootstrap] Loading Purpur 1.21.5-2450-HEAD@61d7f55 (2025-06-17T05:07:48Z) for Minecraft 1.21.5
-[15:21:13] [ServerMain/INFO]: [PluginInitializerManager] Initializing plugins...
-[15:21:15] [ServerMain/INFO]: [PluginInitializerManager] Initialized 1 plugin
-[15:21:15] [ServerMain/INFO]: [PluginInitializerManager] Bukkit plugins (1):
+[16:36:33] [ServerMain/INFO]: [bootstrap] Running Java 21 (OpenJDK 64-Bit Server VM 21.0.8+9-LTS; Eclipse Adoptium Temurin-21.0.8+9) on Linux 6.6.87.1-microsoft-standard-WSL2 (amd64)
+[16:36:33] [ServerMain/INFO]: [bootstrap] Loading Purpur 1.21.5-2450-HEAD@61d7f55 (2025-06-17T05:07:48Z) for Minecraft 1.21.5
+[16:36:34] [ServerMain/INFO]: [PluginInitializerManager] Initializing plugins...
+[16:36:36] [ServerMain/INFO]: [PluginInitializerManager] Initialized 1 plugin
+[16:36:36] [ServerMain/INFO]: [PluginInitializerManager] Bukkit plugins (1):
  - BackpackPlugin (1.0-SNAPSHOT)
-[15:21:33] [ServerMain/INFO]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
-[15:21:50] [ServerMain/INFO]: Loaded 1373 recipes
-[15:21:50] [ServerMain/INFO]: Loaded 1484 advancements
-[15:21:51] [Server thread/INFO]: Starting minecraft server version 1.21.5
-[15:21:51] [Server thread/WARN]: ****************************
-[15:21:51] [Server thread/WARN]: YOU ARE RUNNING THIS SERVER AS AN ADMINISTRATIVE OR ROOT USER. THIS IS NOT ADVISED.
-[15:21:51] [Server thread/WARN]: YOU ARE OPENING YOURSELF UP TO POTENTIAL RISKS WHEN DOING THIS.
-[15:21:51] [Server thread/WARN]: FOR MORE INFORMATION, SEE https://madelinemiller.dev/blog/root-minecraft-server/
-[15:21:51] [Server thread/WARN]: ****************************
-[15:21:51] [Server thread/INFO]: Loading properties
-[15:21:51] [Server thread/INFO]: This server is running Purpur version 1.21.5-2450-HEAD@61d7f55 (2025-06-17T05:07:48Z) (Implementing API version 1.21.5-R0.1-SNAPSHOT)
-[15:21:51] [Server thread/INFO]: [spark] This server bundles the spark profiler. For more information please visit https://docs.papermc.io/paper/profiling
-[15:21:52] [Server thread/INFO]: Server Ping Player Sample Count: 12
-[15:21:52] [Server thread/INFO]: Using 4 threads for Netty based IO
-[15:21:54] [Server thread/INFO]: [MoonriseCommon] Paper is using 2 worker threads, 1 I/O threads
-[15:21:54] [Server thread/INFO]: [ChunkTaskScheduler] Chunk system is using population gen parallelism: true
-[15:21:56] [Server thread/INFO]: Default game type: SURVIVAL
-[15:21:56] [Server thread/INFO]: Generating keypair
-[15:21:56] [Server thread/INFO]: Starting Minecraft server on *:25565
-[15:21:56] [Server thread/INFO]: Using epoll channel type
-[15:21:56] [Server thread/INFO]: Paper: Using libdeflate (Linux x86_64) compression from Velocity.
-[15:21:56] [Server thread/INFO]: Paper: Using OpenSSL 3.x.x (Linux x86_64) cipher from Velocity.
-[15:21:57] [Server thread/INFO]: [BackpackPlugin] Loading server plugin BackpackPlugin v1.0-SNAPSHOT
-[15:21:57] [Server thread/INFO]: Server permissions file permissions.yml is empty, ignoring it
-[15:21:57] [Server thread/INFO]: Preparing level "world"
-[15:22:00] [Server thread/INFO]: Preparing start region for dimension minecraft:overworld
-[15:22:01] [Server thread/INFO]: Preparing spawn area: 0%
-[15:22:01] [Server thread/INFO]: Preparing spawn area: 0%
-[15:22:01] [Server thread/INFO]: Preparing spawn area: 0%
-[15:22:02] [Server thread/INFO]: Preparing spawn area: 2%
-[15:22:02] [Server thread/INFO]: Preparing spawn area: 2%
-[15:22:03] [Server thread/INFO]: Preparing spawn area: 2%
-[15:22:03] [Server thread/INFO]: Time elapsed: 2598 ms
-[15:22:03] [Server thread/INFO]: Preparing start region for dimension minecraft:the_nether
-[15:22:03] [Server thread/INFO]: Preparing spawn area: 0%
-[15:22:03] [Server thread/INFO]: Time elapsed: 494 ms
-[15:22:03] [Server thread/INFO]: Preparing start region for dimension minecraft:the_end
-[15:22:03] [Server thread/INFO]: Preparing spawn area: 0%
-[15:22:04] [Server thread/INFO]: Time elapsed: 500 ms
-[15:22:04] [Server thread/INFO]: [BackpackPlugin] Enabling BackpackPlugin v1.0-SNAPSHOT
-[15:22:04] [Server thread/INFO]: [BackpackPlugin] BackpackPlugin wurde erfolgreich geladen!
-[15:22:05] [Server thread/INFO]: [spark] Starting background profiler...
-[15:22:06] [Server thread/INFO]: Done preparing level "world" (8.687s)
-[15:22:06] [Server thread/INFO]: Running delayed init tasks
-[15:22:06] [Server thread/INFO]: Done (59.801s)! For help, type "help"
+[16:36:48] [ServerMain/INFO]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[16:37:01] [ServerMain/INFO]: Loaded 1373 recipes
+[16:37:01] [ServerMain/INFO]: Loaded 1484 advancements
+[16:37:01] [Server thread/INFO]: Starting minecraft server version 1.21.5
+[16:37:01] [Server thread/WARN]: ****************************
+[16:37:01] [Server thread/WARN]: YOU ARE RUNNING THIS SERVER AS AN ADMINISTRATIVE OR ROOT USER. THIS IS NOT ADVISED.
+[16:37:01] [Server thread/WARN]: YOU ARE OPENING YOURSELF UP TO POTENTIAL RISKS WHEN DOING THIS.
+[16:37:01] [Server thread/WARN]: FOR MORE INFORMATION, SEE https://madelinemiller.dev/blog/root-minecraft-server/
+[16:37:01] [Server thread/WARN]: ****************************
+[16:37:01] [Server thread/INFO]: Loading properties
+[16:37:01] [Server thread/INFO]: This server is running Purpur version 1.21.5-2450-HEAD@61d7f55 (2025-06-17T05:07:48Z) (Implementing API version 1.21.5-R0.1-SNAPSHOT)
+[16:37:02] [Server thread/INFO]: [spark] This server bundles the spark profiler. For more information please visit https://docs.papermc.io/paper/profiling
+[16:37:02] [Server thread/INFO]: Server Ping Player Sample Count: 12
+[16:37:02] [Server thread/INFO]: Using 4 threads for Netty based IO
+[16:37:04] [Server thread/INFO]: [MoonriseCommon] Paper is using 2 worker threads, 1 I/O threads
+[16:37:04] [Server thread/INFO]: [ChunkTaskScheduler] Chunk system is using population gen parallelism: true
+[16:37:06] [Server thread/INFO]: Default game type: SURVIVAL
+[16:37:06] [Server thread/INFO]: Generating keypair
+[16:37:06] [Server thread/INFO]: Starting Minecraft server on *:25565
+[16:37:06] [Server thread/INFO]: Using epoll channel type
+[16:37:06] [Server thread/INFO]: Paper: Using libdeflate (Linux x86_64) compression from Velocity.
+[16:37:06] [Server thread/INFO]: Paper: Using OpenSSL 3.x.x (Linux x86_64) cipher from Velocity.
+[16:37:07] [Server thread/INFO]: [BackpackPlugin] Loading server plugin BackpackPlugin v1.0-SNAPSHOT
+[16:37:07] [Server thread/INFO]: Server permissions file permissions.yml is empty, ignoring it
+[16:37:07] [Server thread/INFO]: Preparing level "world"
+[16:37:09] [Server thread/INFO]: Preparing start region for dimension minecraft:overworld
+[16:37:09] [Server thread/INFO]: Preparing spawn area: 0%
+[16:37:10] [Server thread/INFO]: Preparing spawn area: 2%
+[16:37:11] [Server thread/INFO]: Preparing spawn area: 2%
+[16:37:11] [Server thread/INFO]: Preparing spawn area: 2%
+[16:37:11] [Server thread/INFO]: Time elapsed: 1939 ms
+[16:37:11] [Server thread/INFO]: Preparing start region for dimension minecraft:the_nether
+[16:37:11] [Server thread/INFO]: Preparing spawn area: 0%
+[16:37:11] [Server thread/INFO]: Time elapsed: 279 ms
+[16:37:11] [Server thread/INFO]: Preparing start region for dimension minecraft:the_end
+[16:37:11] [Server thread/INFO]: Preparing spawn area: 0%
+[16:37:11] [Server thread/INFO]: Time elapsed: 311 ms
+[16:37:12] [Server thread/INFO]: [BackpackPlugin] Enabling BackpackPlugin v1.0-SNAPSHOT
+[16:37:12] [Server thread/INFO]: [BackpackPlugin] BackpackPlugin wurde erfolgreich geladen!
+[16:37:12] [Server thread/INFO]: [spark] Starting background profiler...
+[16:37:13] [Server thread/INFO]: Done preparing level "world" (5.953s)
+[16:37:13] [Server thread/INFO]: Running delayed init tasks
+[16:37:13] [Server thread/INFO]: Done (42.674s)! For help, type "help"
