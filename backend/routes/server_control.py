@@ -97,7 +97,13 @@ def server_stats(servername: str, current_user: dict = Depends(get_current_user)
     if pid:
         try:
             p = psutil.Process(pid)
+            # Summe aller Java-Prozesse im tmux-Session
             ram_used = int(p.memory_info().rss / 1024 / 1024)
+            for child in p.children(recursive=True):
+                try:
+                    ram_used += int(child.memory_info().rss / 1024 / 1024)
+                except Exception:
+                    pass
             uptime = int(time.time() - p.create_time())
         except Exception:
             ram_used = None

@@ -1,0 +1,54 @@
+[15:56:32] [ServerMain/INFO]: [bootstrap] Running Java 21 (OpenJDK 64-Bit Server VM 21.0.8+9-LTS; Eclipse Adoptium Temurin-21.0.8+9) on Linux 6.6.87.1-microsoft-standard-WSL2 (amd64)
+[15:56:32] [ServerMain/INFO]: [bootstrap] Loading Purpur 1.21.5-2450-HEAD@61d7f55 (2025-06-17T05:07:48Z) for Minecraft 1.21.5
+[15:56:34] [ServerMain/INFO]: [PluginInitializerManager] Initializing plugins...
+[15:56:37] [ServerMain/INFO]: [PluginInitializerManager] Initialized 1 plugin
+[15:56:37] [ServerMain/INFO]: [PluginInitializerManager] Bukkit plugins (1):
+ - BackpackPlugin (1.0-SNAPSHOT)
+[15:56:59] [ServerMain/INFO]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[15:57:24] [ServerMain/INFO]: Loaded 1373 recipes
+[15:57:24] [ServerMain/INFO]: Loaded 1484 advancements
+[15:57:24] [Server thread/INFO]: Starting minecraft server version 1.21.5
+[15:57:24] [Server thread/WARN]: ****************************
+[15:57:24] [Server thread/WARN]: YOU ARE RUNNING THIS SERVER AS AN ADMINISTRATIVE OR ROOT USER. THIS IS NOT ADVISED.
+[15:57:24] [Server thread/WARN]: YOU ARE OPENING YOURSELF UP TO POTENTIAL RISKS WHEN DOING THIS.
+[15:57:24] [Server thread/WARN]: FOR MORE INFORMATION, SEE https://madelinemiller.dev/blog/root-minecraft-server/
+[15:57:24] [Server thread/WARN]: ****************************
+[15:57:24] [Server thread/INFO]: Loading properties
+[15:57:25] [Server thread/INFO]: This server is running Purpur version 1.21.5-2450-HEAD@61d7f55 (2025-06-17T05:07:48Z) (Implementing API version 1.21.5-R0.1-SNAPSHOT)
+[15:57:25] [Server thread/INFO]: [spark] This server bundles the spark profiler. For more information please visit https://docs.papermc.io/paper/profiling
+[15:57:26] [Server thread/INFO]: Server Ping Player Sample Count: 12
+[15:57:26] [Server thread/INFO]: Using 4 threads for Netty based IO
+[15:57:29] [Server thread/INFO]: [MoonriseCommon] Paper is using 2 worker threads, 1 I/O threads
+[15:57:29] [Server thread/INFO]: [ChunkTaskScheduler] Chunk system is using population gen parallelism: true
+[15:57:31] [Server thread/INFO]: Default game type: SURVIVAL
+[15:57:31] [Server thread/INFO]: Generating keypair
+[15:57:31] [Server thread/INFO]: Starting Minecraft server on *:25565
+[15:57:32] [Server thread/INFO]: Using epoll channel type
+[15:57:32] [Server thread/INFO]: Paper: Using libdeflate (Linux x86_64) compression from Velocity.
+[15:57:32] [Server thread/INFO]: Paper: Using OpenSSL 3.x.x (Linux x86_64) cipher from Velocity.
+[15:57:33] [Server thread/INFO]: [BackpackPlugin] Loading server plugin BackpackPlugin v1.0-SNAPSHOT
+[15:57:33] [Server thread/INFO]: Server permissions file permissions.yml is empty, ignoring it
+[15:57:33] [Server thread/INFO]: Preparing level "world"
+[15:57:37] [Server thread/INFO]: Preparing start region for dimension minecraft:overworld
+[15:57:38] [Server thread/INFO]: Preparing spawn area: 0%
+[15:57:38] [Server thread/INFO]: Preparing spawn area: 0%
+[15:57:39] [Server thread/INFO]: Preparing spawn area: 0%
+[15:57:39] [Server thread/INFO]: Preparing spawn area: 0%
+[15:57:40] [Server thread/INFO]: Preparing spawn area: 2%
+[15:57:40] [Server thread/INFO]: Preparing spawn area: 2%
+[15:57:41] [Server thread/INFO]: Preparing spawn area: 2%
+[15:57:41] [Server thread/INFO]: Time elapsed: 3180 ms
+[15:57:41] [Server thread/INFO]: Preparing start region for dimension minecraft:the_nether
+[15:57:41] [Server thread/INFO]: Preparing spawn area: 0%
+[15:57:41] [Server thread/INFO]: Preparing spawn area: 36%
+[15:57:41] [Server thread/INFO]: Time elapsed: 596 ms
+[15:57:41] [Server thread/INFO]: Preparing start region for dimension minecraft:the_end
+[15:57:41] [Server thread/INFO]: Preparing spawn area: 0%
+[15:57:42] [Server thread/INFO]: Preparing spawn area: 24%
+[15:57:42] [Server thread/INFO]: Time elapsed: 663 ms
+[15:57:42] [Server thread/INFO]: [BackpackPlugin] Enabling BackpackPlugin v1.0-SNAPSHOT
+[15:57:42] [Server thread/INFO]: [BackpackPlugin] BackpackPlugin wurde erfolgreich geladen!
+[15:57:43] [Server thread/INFO]: [spark] Starting background profiler...
+[15:57:43] [Server thread/INFO]: Done preparing level "world" (10.398s)
+[15:57:44] [Server thread/INFO]: Running delayed init tasks
+[15:57:44] [Server thread/INFO]: Done (78.999s)! For help, type "help"
