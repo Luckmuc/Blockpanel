@@ -48,5 +48,15 @@ A private web panel for Minecraft server hosting. Built with Docker, FastAPI, an
 - Rate limiting recommended (optional)
 - Directory traversal protection everywhere
 
+## Troubleshooting (Linux/WSL)
+
+- Stelle sicher, dass alle Shell-Skripte (z.B. `entrypoint.sh`) mit Unix-Zeilenenden (LF) gespeichert sind. In VS Code unten rechts auf "LF" stellen.
+- Falls Fehler wie `Exec format error` auftreten, führe im Projektordner aus:
+  ```sh
+  dos2unix backend/entrypoint.sh
+  chmod +x backend/entrypoint.sh
+  ```
+- Die Dockerfiles und das Compose-File sind so angepasst, dass sie auf Linux und Windows funktionieren.
+
 ## License
 MIT
