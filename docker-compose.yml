@@ -1,7 +1,9 @@
 
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     volumes:
       - ./backend:/app
       - ./mc_servers:/app/mc_servers
@@ -14,6 +16,7 @@ services:
   frontend:
     build:
       context: ./frontend
+      dockerfile: Dockerfile
     volumes:
       - ./frontend:/app
       - /app/node_modules
