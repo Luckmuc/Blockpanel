@@ -1,8 +1,6 @@
 
 services:
   backend:
-services:
-  backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
