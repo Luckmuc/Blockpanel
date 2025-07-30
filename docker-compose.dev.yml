@@ -1,11 +1,11 @@
-
 services:
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    # In Produktion keine Volumes mounten, damit die im Image gesetzten Rechte erhalten bleiben
-    # Für Entwicklung siehe docker-compose.dev.yml
+    volumes:
+      - ./backend:/app
+      - ./mc_servers:/app/mc_servers
     ports:
       - "8000:8000"
       - "25565:25565"
@@ -16,8 +16,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    # In Produktion keine Volumes mounten, damit die im Image gesetzten Rechte erhalten bleiben
-    # Für Entwicklung siehe docker-compose.dev.yml
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     ports:
       - "1105:80"
     environment:
