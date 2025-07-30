@@ -1,4 +1,5 @@
 #!/bin/sh
+chmod +x "$0"
 set -e
 
 # Starte nur das Backend (Server-Initialisierung erfolgt über die API)
