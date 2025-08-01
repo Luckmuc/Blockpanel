@@ -9,7 +9,7 @@ import StorageIcon from "@mui/icons-material/Storage";
 import ExtensionIcon from "@mui/icons-material/Extension";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import LogoutIcon from "@mui/icons-material/Logout";
-import { fetchServers, startServer, acceptEula, deleteServer, stopServer } from "../api/servers";
+import { fetchServers, startServer, acceptEula, deleteServer, stopServer, createAndStartServer, checkPortAvailability } from "../api/servers";
 import { checkServerPort } from "../api/servers";
 import ServerStatusPanel from "./ServerStatusPanel";
 import Dialog from "@mui/material/Dialog";
@@ -106,11 +106,37 @@ const PanelServers: React.FC = () => {
   const [eulaWaiting, setEulaWaiting] = useState(false);
   const [eulaInfo, setEulaInfo] = useState<string | undefined>(undefined);
 
+  // Pre-Creation EULA Dialog State
+  const [preCreationEulaDialog, setPreCreationEulaDialog] = useState(false);
+  const [pendingServerCreation, setPendingServerCreation] = useState<{
+    name: string;
+    purpurUrl: string;
+    ram: string;
+    port: number;
+  } | null>(null);
+
+  // Server Creation Progress Dialog State
+  const [creationProgressDialog, setCreationProgressDialog] = useState(false);
+  const [creationProgress, setCreationProgress] = useState({
+    downloadData: false,
+    initialRun: false,
+    acceptEula: false,
+    startServer: false,
+    completed: false,
+    currentStep: ""
+  });
+
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newRam, setNewRam] = useState("2048");
+  const [newPort, setNewPort] = useState("25565");
   const [newVersion, setNewVersion] = useState(SERVER_VERSIONS[0].version);
   const [creating, setCreating] = useState(false);
+  const [portConflictDialog, setPortConflictDialog] = useState<{
+    open: boolean;
+    suggestedPort: number;
+    requestedPort: number;
+  }>({ open: false, suggestedPort: 25566, requestedPort: 25565 });
 
   // Handler for starting server
   const handleStartServer = async (server: string) => {
@@ -198,19 +224,152 @@ const PanelServers: React.FC = () => {
       .finally(() => setLoading(false));
   }, [token]);
 
-  // Handler for creating server
+  // Handler for creating server - now shows EULA dialog first
   const handleCreate = async () => {
+    // Find the selected version's purpur URL
+    const selectedVersion = SERVER_VERSIONS.find(v => v.version === newVersion);
+    if (!selectedVersion) {
+      setEulaInfo("Invalid server version selected");
+      return;
+    }
+
+    // Check port availability first
+    const portNum = parseInt(newPort);
+    if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+      setError("Invalid port number. Must be between 1 and 65535.");
+      return;
+    }
+
+    try {
+      const portCheck = await checkPortAvailability(portNum, token);
+      if (!portCheck.available) {
+        // Show port conflict dialog
+        setPortConflictDialog({
+          open: true,
+          suggestedPort: portCheck.suggested_port,
+          requestedPort: portNum
+        });
+        return;
+      }
+    } catch (err) {
+      setError("Failed to check port availability.");
+      return;
+    }
+
+    // Store pending creation data and show EULA dialog
+    setPendingServerCreation({
+      name: newName,
+      purpurUrl: selectedVersion.purpurURL,
+      ram: newRam,
+      port: portNum
+    });
+    
+    setShowCreate(false);
+    setPreCreationEulaDialog(true);
+  };
+
+  // Handler to accept port suggestion and create server
+  const handleAcceptSuggestedPort = () => {
+    setNewPort(portConflictDialog.suggestedPort.toString());
+    setPortConflictDialog({ open: false, suggestedPort: 25566, requestedPort: 25565 });
+    // Re-trigger creation with new port
+    setTimeout(() => handleCreate(), 100);
+  };
+
+  // Handler for accepting EULA and creating server
+  const handleAcceptEulaAndCreate = async () => {
+    if (!pendingServerCreation) return;
+    
     setCreating(true);
     setEulaInfo(undefined);
+    setPreCreationEulaDialog(false);
+    
+    // Show creation progress dialog
+    setCreationProgressDialog(true);
+    setCreationProgress({
+      downloadData: false,
+      initialRun: false,
+      acceptEula: false,
+      startServer: false,
+      completed: false,
+      currentStep: "Starting server creation..."
+    });
+    
     try {
-      // Dummy create logic, replace with actual API call if needed
-      setEulaDialog({ open: true, server: newName, isNewServer: true });
-      setShowCreate(false);
-      setEulaInfo(undefined);
+      // Step 1: Download Data
+      setCreationProgress(prev => ({ ...prev, currentStep: "Downloading server data..." }));
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate delay
+      setCreationProgress(prev => ({ ...prev, downloadData: true }));
+
+      // Step 2: Initial Run
+      setCreationProgress(prev => ({ ...prev, currentStep: "Running initial server setup..." }));
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate delay
+      setCreationProgress(prev => ({ ...prev, initialRun: true }));
+
+      // Step 3: Accept EULA
+      setCreationProgress(prev => ({ ...prev, currentStep: "Accepting EULA..." }));
+      await new Promise(resolve => setTimeout(resolve, 800)); // Simulate delay
+      setCreationProgress(prev => ({ ...prev, acceptEula: true }));
+
+      // Step 4: Start Server
+      setCreationProgress(prev => ({ ...prev, currentStep: "Starting the server..." }));
+      
+      // Call the simplified create and start server API with port
+      const result = await createAndStartServer(
+        pendingServerCreation.name, 
+        pendingServerCreation.purpurUrl, 
+        pendingServerCreation.ram, 
+        pendingServerCreation.port,
+        true, 
+        token
+      );
+      
+      setCreationProgress(prev => ({ ...prev, startServer: true }));
+      
+      // Completion
+      setCreationProgress(prev => ({ 
+        ...prev, 
+        completed: true,
+        currentStep: `Server "${pendingServerCreation.name}" created successfully!`
+      }));
+      
+      // Wait a moment to show completion
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Close dialogs and reset
+      setCreationProgressDialog(false);
+      setEulaInfo(result.message || `Server "${pendingServerCreation.name}" created and started successfully!`);
+      
+      // Reset form and pending data
+      setNewName("");
+      setNewRam("2048");
+      setNewPort("25565");
+      setNewVersion(SERVER_VERSIONS[0].version);
+      setPendingServerCreation(null);
+      
+      // Refresh server list
+      fetchServers(token).then(setServers);
+      
     } catch (error: any) {
+      setCreationProgress(prev => ({ 
+        ...prev, 
+        currentStep: "Error: " + (error.message || "Failed to create server")
+      }));
+      
+      // Wait a moment then close
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      setCreationProgressDialog(false);
       setEulaInfo(error.message || "Failed to create server. Please try again.");
+      setPendingServerCreation(null);
     }
     setCreating(false);
+  };
+
+  // Handler for declining EULA
+  const handleDeclineEula = () => {
+    setPreCreationEulaDialog(false);
+    setPendingServerCreation(null);
+    setEulaInfo("Server creation cancelled. You must accept the EULA to create a Minecraft server.");
   };
 
   return (
@@ -406,6 +565,16 @@ const PanelServers: React.FC = () => {
                   sx={{ minWidth: 140 }}
                 />
                 <TextField
+                  label="Port"
+                  value={newPort}
+                  onChange={e => setNewPort(e.target.value)}
+                  size="small"
+                  type="number"
+                  inputProps={{ min: 1, max: 65535 }}
+                  helperText="Default: 25565"
+                  sx={{ minWidth: 120 }}
+                />
+                <TextField
                   select
                   label="Version"
                   value={newVersion}
@@ -547,6 +716,183 @@ const PanelServers: React.FC = () => {
           )}
         </Paper>
       </Box>
+      
+      {/* Server Creation Progress Dialog */}
+      <Dialog 
+        open={creationProgressDialog} 
+        disableEscapeKeyDown
+        maxWidth="md" 
+        fullWidth
+        PaperProps={{
+          sx: {
+            background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+            color: '#fff',
+            borderRadius: 4,
+            boxShadow: '0 12px 40px 0 rgba(31, 38, 135, 0.5)',
+            minHeight: '400px'
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 700, color: '#fff', textAlign: 'center', pb: 1 }}>
+          <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+            🚀 Creating Server: {pendingServerCreation?.name}
+          </Typography>
+        </DialogTitle>
+        
+        <DialogContent sx={{ px: 4, pb: 4 }}>
+          <Box sx={{ mb: 3, textAlign: 'center' }}>
+            <Typography sx={{ color: '#b0c4de', fontSize: 16 }}>
+              Please wait while we set up your Minecraft server...
+            </Typography>
+          </Box>
+
+          {/* Progress Checklist */}
+          <Box sx={{ maxWidth: 500, mx: 'auto' }}>
+            {[
+              { key: 'downloadData', label: 'Download Data', icon: '📦' },
+              { key: 'initialRun', label: 'Initial Run', icon: '⚙️' },
+              { key: 'acceptEula', label: 'Accept EULA', icon: '📋' },
+              { key: 'startServer', label: 'Start the Server', icon: '🎮' }
+            ].map((step) => (
+              <Box
+                key={step.key}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  mb: 3,
+                  p: 2,
+                  borderRadius: 2,
+                  background: creationProgress[step.key as keyof typeof creationProgress] 
+                    ? 'linear-gradient(90deg, #2e7d32 0%, #4caf50 100%)' 
+                    : 'rgba(255, 255, 255, 0.05)',
+                  border: `2px solid ${creationProgress[step.key as keyof typeof creationProgress] ? '#4caf50' : '#444'}`,
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                <Box sx={{ mr: 3, fontSize: 24 }}>
+                  {creationProgress[step.key as keyof typeof creationProgress] ? '✅' : step.icon}
+                </Box>
+                
+                <Box sx={{ flex: 1 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: 18 }}>
+                    {step.label}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ ml: 2 }}>
+                  {creationProgress[step.key as keyof typeof creationProgress] ? (
+                    <Typography sx={{ color: '#4caf50', fontWeight: 600 }}>✓ Done</Typography>
+                  ) : (
+                    <CircularProgress size={20} color="info" />
+                  )}
+                </Box>
+              </Box>
+            ))}
+          </Box>
+
+          {/* Current Step Info */}
+          <Box sx={{ mt: 4, textAlign: 'center' }}>
+            <Typography sx={{ 
+              color: creationProgress.completed ? '#4caf50' : '#ffb300', 
+              fontSize: 16, 
+              fontWeight: 500,
+              minHeight: 24
+            }}>
+              {creationProgress.currentStep}
+            </Typography>
+          </Box>
+
+          {/* Completion Message */}
+          {creationProgress.completed && (
+            <Box sx={{ mt: 3, textAlign: 'center' }}>
+              <Typography sx={{ color: '#4caf50', fontSize: 18, fontWeight: 600 }}>
+                🎉 Server created successfully!
+              </Typography>
+              <Typography sx={{ color: '#b0c4de', fontSize: 14, mt: 1 }}>
+                Returning to panel...
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Pre-Creation EULA Dialog */}
+      <Dialog open={preCreationEulaDialog} onClose={() => !creating && handleDeclineEula()} maxWidth="sm" fullWidth
+        PaperProps={{
+          sx: {
+            background: 'linear-gradient(135deg, #232526 0%, #414345 100%)',
+            color: '#fff',
+            borderRadius: 3,
+            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 700, color: '#fff', textAlign: 'center' }}>
+          🚀 Create Minecraft Server
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 3, color: '#b0c4de', textAlign: 'center', fontSize: 16 }}>
+            {pendingServerCreation && (
+              <>Server: <strong style={{ color: '#90caf9' }}>{pendingServerCreation.name}</strong><br/>
+              RAM: <strong style={{ color: '#90caf9' }}>{pendingServerCreation.ram}MB</strong><br/>
+              Port: <strong style={{ color: '#90caf9' }}>{pendingServerCreation.port}</strong></>
+            )}
+          </Typography>
+          
+          <Typography sx={{ mb: 2, color: '#fff', textAlign: 'center', fontSize: 15 }}>
+            Do you agree to the <strong>Minecraft End User License Agreement (EULA)</strong>?
+          </Typography>
+          
+          <Box sx={{ textAlign: 'center', mb: 3 }}>
+            <a 
+              href="https://account.mojang.com/documents/minecraft_eula" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              style={{ 
+                color: '#90caf9', 
+                textDecoration: 'none',
+                fontSize: 14,
+                fontWeight: 500
+              }}
+            >
+              📄 Read the Minecraft EULA →
+            </a>
+          </Box>
+          
+          <Typography sx={{ color: '#ffab91', fontSize: 13, textAlign: 'center', fontStyle: 'italic' }}>
+            By creating a Minecraft server, you must agree to the EULA.
+            If you decline, the server will not be created.
+          </Typography>
+          
+          {creating && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 2 }}>
+              <CircularProgress size={24} color="info" sx={{ mb: 1 }} />
+              <Typography sx={{ color: '#ffb300', fontSize: 14 }}>Creating server...</Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center', pb: 3, gap: 2 }}>
+          <Button 
+            onClick={handleDeclineEula} 
+            color="error" 
+            variant="outlined" 
+            disabled={creating} 
+            sx={{ minWidth: 120, fontWeight: 600, textTransform: 'none' }}
+          >
+            ❌ Decline
+          </Button>
+          <Button 
+            onClick={handleAcceptEulaAndCreate} 
+            color="success" 
+            variant="contained" 
+            disabled={creating} 
+            sx={{ minWidth: 120, fontWeight: 600, textTransform: 'none' }}
+          >
+            ✅ Accept & Create
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* EULA Dialog */}
       <Dialog open={eulaDialog.open} onClose={() => !eulaWaiting && setEulaDialog({ open: false, server: undefined, isNewServer: false })} maxWidth="sm" fullWidth
         PaperProps={{
@@ -583,6 +929,51 @@ const PanelServers: React.FC = () => {
           </Button>
           <Button onClick={() => handleEulaDecision(true)} color="success" variant="contained" disabled={eulaWaiting} sx={{ minWidth: 100, fontWeight: 600 }}>
             Agree
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Port Conflict Dialog */}
+      <Dialog 
+        open={portConflictDialog.open} 
+        onClose={() => setPortConflictDialog({ open: false, suggestedPort: 25566, requestedPort: 25565 })}
+        PaperProps={{
+          sx: {
+            backgroundColor: 'rgba(26, 32, 44, 0.95)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: 3,
+            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 700, color: '#fff', textAlign: 'center' }}>
+          Port Conflict Detected
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 2, color: '#b0c4de', textAlign: 'center' }}>
+            Port {portConflictDialog.requestedPort} is already in use by another server.
+          </Typography>
+          <Typography sx={{ mb: 2, color: '#90caf9', textAlign: 'center' }}>
+            Would you like to use port {portConflictDialog.suggestedPort} instead?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center', pb: 2 }}>
+          <Button 
+            onClick={() => setPortConflictDialog({ open: false, suggestedPort: 25566, requestedPort: 25565 })} 
+            color="error" 
+            variant="outlined" 
+            sx={{ minWidth: 100, fontWeight: 600 }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleAcceptSuggestedPort} 
+            color="success" 
+            variant="contained" 
+            sx={{ minWidth: 100, fontWeight: 600 }}
+          >
+            Use Port {portConflictDialog.suggestedPort}
           </Button>
         </DialogActions>
       </Dialog>

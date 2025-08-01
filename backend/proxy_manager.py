@@ -1,0 +1,173 @@
+"""
+HAProxy Konfiguration Manager für dynamische Port-Weiterleitung
+"""
+import os
+import subprocess
+import logging
+from typing import Dict, List
+
+logger = logging.getLogger(__name__)
+
+class ProxyManager:
+    def __init__(self, config_path: str = "/shared/proxy/haproxy.cfg", 
+                 reload_script: str = "/shared/proxy/reload-haproxy.sh"):
+        self.config_path = config_path
+        self.reload_script = reload_script
+        
+    def add_server_proxy(self, server_name: str, port: int) -> bool:
+        """
+        Fügt einen neuen Minecraft Server zur HAProxy Konfiguration hinzu
+        """
+        try:
+            # Template für neuen Frontend/Backend
+            frontend_config = f"""
+frontend minecraft_{server_name}
+    bind *:{port}
+    mode tcp
+    default_backend backend_{server_name}
+"""
+            
+            backend_config = f"""
+backend backend_{server_name}
+    mode tcp
+    balance roundrobin
+    server mc_{server_name} backend:{port} check
+"""
+            
+            # Lese aktuelle Konfiguration
+            if os.path.exists(self.config_path):
+                with open(self.config_path, 'r') as f:
+                    current_config = f.read()
+            else:
+                # Erstelle Basis-Konfiguration falls nicht vorhanden
+                current_config = self._get_base_config()
+            
+            # Prüfe ob Server bereits existiert
+            if f"frontend minecraft_{server_name}" in current_config:
+                logger.warning(f"Server {server_name} bereits in HAProxy Konfiguration")
+                return False
+            
+            # Füge neue Konfiguration hinzu
+            new_config = current_config + frontend_config + backend_config
+            
+            # Schreibe neue Konfiguration
+            with open(self.config_path, 'w') as f:
+                f.write(new_config)
+            
+            # Lade HAProxy neu
+            return self._reload_haproxy()
+            
+        except Exception as e:
+            logger.error(f"Fehler beim Hinzufügen von Server {server_name}: {e}")
+            return False
+    
+    def remove_server_proxy(self, server_name: str) -> bool:
+        """
+        Entfernt einen Minecraft Server aus der HAProxy Konfiguration
+        """
+        try:
+            if not os.path.exists(self.config_path):
+                return True
+            
+            with open(self.config_path, 'r') as f:
+                lines = f.readlines()
+            
+            # Filtere Zeilen für den zu entfernenden Server
+            new_lines = []
+            skip_section = False
+            
+            for line in lines:
+                # Beginnt Frontend/Backend Section für diesen Server?
+                if (f"frontend minecraft_{server_name}" in line or 
+                    f"backend backend_{server_name}" in line):
+                    skip_section = True
+                    continue
+                
+                # Neue Section beginnt?
+                if line.startswith(('frontend ', 'backend ', 'global', 'defaults')):
+                    skip_section = False
+                
+                # Zeile hinzufügen wenn nicht in zu überspringender Section
+                if not skip_section:
+                    new_lines.append(line)
+            
+            # Schreibe neue Konfiguration
+            with open(self.config_path, 'w') as f:
+                f.writelines(new_lines)
+            
+            # Lade HAProxy neu
+            return self._reload_haproxy()
+            
+        except Exception as e:
+            logger.error(f"Fehler beim Entfernen von Server {server_name}: {e}")
+            return False
+    
+    def _reload_haproxy(self) -> bool:
+        """
+        Lädt HAProxy-Konfiguration neu
+        """
+        try:
+            if os.path.exists(self.reload_script):
+                result = subprocess.run(['bash', self.reload_script], 
+                                      capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    logger.info("HAProxy erfolgreich neugeladen")
+                    return True
+                else:
+                    logger.error(f"HAProxy Reload fehlgeschlagen: {result.stderr}")
+                    return False
+            else:
+                logger.warning("HAProxy Reload Script nicht gefunden")
+                return False
+        except Exception as e:
+            logger.error(f"Fehler beim HAProxy Reload: {e}")
+            return False
+    
+    def _get_base_config(self) -> str:
+        """
+        Gibt die Basis HAProxy Konfiguration zurück
+        """
+        return """global
+    daemon
+    log stdout local0
+    
+defaults
+    mode tcp
+    timeout connect 5000ms
+    timeout client 50000ms
+    timeout server 50000ms
+    option tcplog
+
+# Statistics Interface (optional)
+frontend stats
+    bind *:8404
+    mode http
+    stats enable
+    stats uri /stats
+    stats refresh 5s
+
+"""
+    
+    def get_active_servers(self) -> List[str]:
+        """
+        Gibt Liste der aktiven Server in der HAProxy Konfiguration zurück
+        """
+        active_servers = []
+        try:
+            if os.path.exists(self.config_path):
+                with open(self.config_path, 'r') as f:
+                    content = f.read()
+                
+                # Suche nach Frontend-Definitionen
+                lines = content.split('\n')
+                for line in lines:
+                    if line.strip().startswith('frontend minecraft_'):
+                        server_name = line.split('minecraft_')[1].strip()
+                        active_servers.append(server_name)
+        except Exception as e:
+            logger.error(f"Fehler beim Abrufen aktiver Server: {e}")
+        
+        return active_servers
+
+# Globale Instanz
+proxy_manager = ProxyManager()
