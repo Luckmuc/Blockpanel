@@ -530,3 +530,9 @@ AttributeError: module 'bcrypt' has no attribute '__about__'
 2025-08-01 11:33:05,979 WARNING Failed to add HAProxy configuration for test
 2025-08-01 11:33:05,985 INFO Created and accepted EULA file for test
 2025-08-01 11:33:06,042 INFO Server test gestartet (PID 46)
+2025-08-01 18:55:07,213 WARNING (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
