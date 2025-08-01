@@ -1,0 +1,11 @@
+Applying patches
+Starting org.bukkit.craftbukkit.Main
+2025-08-01T11:33:38.835810205Z ServerMain WARN Advanced terminal features are not available in this environment
+[11:33:40 INFO]: [bootstrap] Running Java 21 (OpenJDK 64-Bit Server VM 21.0.8+9-LTS; Eclipse Adoptium Temurin-21.0.8+9) on Linux 6.6.87.1-microsoft-standard-WSL2 (amd64)
+[11:33:40 INFO]: [bootstrap] Loading Purpur 1.21.5-2450-HEAD@61d7f55 (2025-06-17T05:07:48Z) for Minecraft 1.21.5
+[11:33:41 INFO]: [PluginInitializerManager] Initializing plugins...
+[11:33:41 INFO]: [PluginInitializerManager] Initialized 0 plugins
+[11:33:43 INFO]: [ReobfServer] Remapping server...
+[11:34:01 INFO]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[11:34:03 INFO]: Found new data pack file/bukkit, loading it automatically
+[11:34:03 INFO]: Found new data pack paper, loading it automatically

@@ -4,22 +4,50 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    # In Produktion keine Volumes mounten, damit die im Image gesetzten Rechte erhalten bleiben
-    # Für Entwicklung siehe docker-compose.dev.yml
     ports:
       - "8000:8000"
-      - "25565:25565"
+    # Backend container exposes port range for Minecraft servers
+    expose:
+      - "25565-25600"
     env_file:
       - .env
     restart: unless-stopped
+    volumes:
+      - mc_servers:/app/mc_servers
+      - ./proxy:/shared/proxy
+    networks:
+      - minecraft_network
+
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    # In Produktion keine Volumes mounten, damit die im Image gesetzten Rechte erhalten bleiben
-    # Für Entwicklung siehe docker-compose.dev.yml
     ports:
-      - "1105:80"
+      - "3000:80"
     environment:
       - NODE_ENV=production
     restart: unless-stopped
+    networks:
+      - minecraft_network
+
+  proxy:
+    build:
+      context: ./proxy
+      dockerfile: Dockerfile
+    ports:
+      - "25565-25600:25565-25600"
+    volumes:
+      - ./proxy:/usr/local/etc/haproxy:rw
+    networks:
+      - minecraft_network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  mc_servers:
+    driver: local
+
+networks:
+  minecraft_network:
+    driver: bridge

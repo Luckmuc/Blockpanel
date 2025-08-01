@@ -35,6 +35,32 @@ export async function checkServerPort(serverName: string, token?: string) {
     return { open: false };
   }
 }
+
+// Check port availability
+export async function checkPortAvailability(port: number = 25565, token?: string) {
+  try {
+    const res = await fetch(`${API_BASE}/server/ports/check?port=${port}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error("API request failed");
+    return res.json();
+  } catch (err) {
+    return { available: false, suggested_port: 25566 };
+  }
+}
+
+// Get next free port
+export async function getFreePort(token?: string) {
+  try {
+    const res = await fetch(`${API_BASE}/server/ports/free`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error("API request failed");
+    return res.json();
+  } catch (err) {
+    return { free_port: 25566 };
+  }
+}
 // Get player count for a server
 export async function getServerPlayerCount(serverName: string, token?: string) {
   try {
@@ -153,6 +179,53 @@ export async function deleteServer(name: string, token: string | undefined) {
   }
 }
 
+export async function createServer(
+  name: string, 
+  purpurUrl: string, 
+  ram: string, 
+  token: string | undefined
+) {
+  try {
+    return await axios.post(
+      `${API_BASE}/server/create`,
+      new URLSearchParams({ 
+        servername: name,
+        purpur_url: purpurUrl,
+        ram: ram
+      }),
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    );
+  } catch (err: any) {
+    throw new Error(err?.response?.data?.detail || "Failed to create server");
+  }
+}
+
+export async function createAndStartServer(
+  name: string, 
+  purpurUrl: string, 
+  ram: string, 
+  port: number = 25565,
+  acceptEula: boolean = true,
+  token: string | undefined
+) {
+  try {
+    const response = await axios.post(
+      `${API_BASE}/server/create_and_start`,
+      new URLSearchParams({ 
+        servername: name,
+        purpur_url: purpurUrl,
+        ram: ram,
+        port: port.toString(),
+        accept_eula: acceptEula.toString()
+      }),
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    );
+    return response.data;
+  } catch (err: any) {
+    throw new Error(err?.response?.data?.detail || "Failed to create and start server");
+  }
+}
+
 export async function acceptEula(name: string, token: string | undefined) {
   try {
     return await axios.post(
@@ -160,7 +233,7 @@ export async function acceptEula(name: string, token: string | undefined) {
       new URLSearchParams({ servername: name }),
       { headers: token ? { Authorization: `Bearer ${token}` } : {} }
     );
-  } catch (err) {
-    return { error: "API request failed" };
+  } catch (err: any) {
+    throw new Error(err?.response?.data?.detail || "Failed to accept EULA");
   }
 }

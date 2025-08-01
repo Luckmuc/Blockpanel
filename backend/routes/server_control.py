@@ -8,44 +8,12 @@ import psutil
 import requests
 import shutil
 import re
+import socket
+import tempfile
+import logging
+from proxy_manager import proxy_manager
 
 router = APIRouter()
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, BackgroundTasks, Form
-from auth import get_current_user
-import subprocess
-import os
-from fastapi.responses import JSONResponse
-import glob
-import psutil
-import requests
-import shutil
-import re
-
-
-
-@router.get("/server/uptime")
-def get_server_uptime(servername: str, current_user: dict = Depends(get_current_user)):
-    """Get the uptime (in seconds) for a running server."""
-    pid = get_server_proc(servername)
-    if not pid:
-        return {"uptime": 0}
-    try:
-        p = psutil.Process(pid)
-        uptime = int((__import__('time').time() - p.create_time()))
-        return {"uptime": uptime}
-    except Exception as e:
-        return {"uptime": 0, "error": str(e)}
-
-@router.get("/server/tmux")
-def get_tmux_output(servername: str, current_user: dict = Depends(get_current_user)):
-    """Get the tmux session output for a server."""
-    session = get_tmux_session(servername)
-    try:
-        out = subprocess.check_output(["tmux", "capture-pane", "-t", session, "-p"], cwd=safe_server_path(servername))
-        return {"output": out.decode(errors="ignore")}
-    except Exception as e:
-        return {"output": f"Error: {str(e)}"}
-@router.get("/server/portcheck")
 def check_server_port(servername: str, current_user: dict = Depends(get_current_user)):
     """
     Prüft, ob der Minecraft-Server-Port erreichbar ist (TCP connect).
@@ -320,17 +288,122 @@ def get_server_ram(servername: str) -> str:
             pass
     return default_ram
 
-def save_server_config(servername: str, ram: str):
+def save_server_config(servername: str, ram: str, port: str = None):
     """Save server configuration"""
     config_path = safe_server_path(servername, "server.config")
     try:
         with open(config_path, "w") as f:
             f.write(f"ram={ram}\n")
+            if port:
+                f.write(f"port={port}\n")
     except Exception as e:
         logging.error(f"Failed to save config for {servername}: {e}")
 
+def get_used_ports():
+    """Get all ports currently used by existing servers"""
+    used_ports = set()
+    mc_servers_dir = os.environ.get("MC_SERVERS_DIR", os.path.join(os.getcwd(), "mc_servers"))
+    
+    if not os.path.exists(mc_servers_dir):
+        return used_ports
+    
+    for server_dir in os.listdir(mc_servers_dir):
+        server_path = os.path.join(mc_servers_dir, server_dir)
+        if not os.path.isdir(server_path):
+            continue
+            
+        props_path = os.path.join(server_path, "server.properties")
+        if os.path.exists(props_path):
+            try:
+                with open(props_path, "r") as f:
+                    for line in f:
+                        if line.strip().startswith("server-port="):
+                            port = int(line.strip().split("=", 1)[1])
+                            used_ports.add(port)
+                            break
+            except Exception:
+                pass
+    return used_ports
+
+def find_free_port(start_port: int = 25565):
+    """Find the next free port starting from start_port"""
+    used_ports = get_used_ports()
+    port = start_port
+    while port in used_ports:
+        port += 1
+        if port > 65535:  # Max port number
+            raise HTTPException(status_code=500, detail="No free ports available")
+    return port
+
+def set_server_port(servername: str, port: int):
+    """Set the port in server.properties"""
+    props_path = safe_server_path(servername, "server.properties")
+    
+    # Read existing properties or create default ones
+    lines = []
+    port_set = False
+    
+    if os.path.exists(props_path):
+        with open(props_path, "r") as f:
+            lines = f.readlines()
+        
+        # Update existing port line
+        for i, line in enumerate(lines):
+            if line.strip().startswith("server-port="):
+                lines[i] = f"server-port={port}\n"
+                port_set = True
+                break
+    
+    # If port wasn't found in existing properties, add it
+    if not port_set:
+        lines.append(f"server-port={port}\n")
+    
+    # Write back to file
+    with open(props_path, "w") as f:
+        f.writelines(lines)
+
+@router.get("/server/ports/check")
+def check_port_availability(port: int = 25565, current_user: dict = Depends(get_current_user)):
+    """Check if a specific port is available"""
+    used_ports = get_used_ports()
+    is_available = port not in used_ports
+    
+    if not is_available:
+        # Suggest next free port
+        free_port = find_free_port(port)
+        return {
+            "available": False,
+            "suggested_port": free_port,
+            "used_ports": sorted(list(used_ports))
+        }
+    
+    return {
+        "available": True,
+        "port": port,
+        "used_ports": sorted(list(used_ports))
+    }
+
+@router.get("/server/ports/free")
+def get_free_port(current_user: dict = Depends(get_current_user)):
+    """Get the next free port starting from 25565"""
+    free_port = find_free_port()
+    used_ports = get_used_ports()
+    return {
+        "free_port": free_port,
+        "used_ports": sorted(list(used_ports))
+    }
+
 @router.post("/server/start")
-def start_server(servername: str, current_user: dict = Depends(get_current_user)):
+def start_server_endpoint(servername: str, current_user: dict = Depends(get_current_user)):
+    return start_server_internal(servername, current_user)
+
+def start_server_internal(servername: str, current_user: dict):
+    # Check if server directory exists first
+    server_dir = safe_server_path(servername)
+    if not os.path.exists(server_dir):
+        logging.error(f"Server directory does not exist for {servername}")
+        return JSONResponse(status_code=404, content={"error": "Server not found"})
+    
     # Prevent multiple servers from starting at once
     import time
     lock_file = safe_server_path(servername, "start.lock")
@@ -473,10 +546,200 @@ def restart_server(servername: str, current_user: dict = Depends(get_current_use
     stop_response = stop_server(servername)
     if stop_response["status"] != "stopped":
         return stop_response
-    start_response = start_server(servername)
+    start_response = start_server_internal(servername, current_user)
     if start_response["status"] != "started":
         return start_response
     return {"status": "restarted"}
+
+@router.post("/server/create_and_start")
+def create_and_start_server(
+    background_tasks: BackgroundTasks,
+    servername: str = Form(...),
+    purpur_url: str = Form(...),
+    ram: str = Form(default="2048"),
+    port: int = Form(default=25565),
+    accept_eula: bool = Form(default=True),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Vereinfachter Endpoint: Erstellt Server, akzeptiert EULA automatisch und startet ihn
+    """
+    import json
+    # 1. Validierung Servername und RAM
+    if not is_valid_servername(servername):
+        raise HTTPException(status_code=400, detail="Invalid servername")
+    try:
+        ram_int = int(ram)
+        if ram_int < 512 or ram_int > 8192:
+            raise HTTPException(status_code=400, detail="RAM must be between 512MB and 8192MB")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid RAM value")
+
+    # 2. Port-Verfügbarkeit prüfen
+    used_ports = get_used_ports()
+    if port in used_ports:
+        free_port = find_free_port(port)
+        raise HTTPException(
+            status_code=409, 
+            detail=f"Port {port} is already in use. Suggested free port: {free_port}"
+        )
+
+    # 3. Check if server already exists
+    mc_servers_dir = os.environ.get("MC_SERVERS_DIR", os.path.join(os.getcwd(), "mc_servers"))
+    base_path = os.path.abspath(os.path.join(mc_servers_dir, servername))
+    if os.path.exists(base_path):
+        raise HTTPException(status_code=400, detail="Server already exists")
+
+    # 4. Zielordner anlegen
+    try:
+        os.makedirs(base_path, exist_ok=True)
+    except Exception as e:
+        logging.error(f"Could not create server directory {base_path}: {e}")
+        raise HTTPException(status_code=500, detail="Could not create server directory.")
+
+    # 5. Download purpur.jar
+    jar_path = os.path.join(base_path, "purpur.jar")
+    try:
+        curl_cmd = ["curl", "-L", "-o", jar_path, purpur_url]
+        result = subprocess.run(curl_cmd, capture_output=True, text=True)
+        if result.returncode != 0 or not os.path.exists(jar_path):
+            logging.error(f"curl Fehler: {result.stderr}")
+            raise HTTPException(status_code=500, detail="Download failed.")
+        if os.name != "nt":
+            try:
+                os.chmod(jar_path, 0o755)
+            except Exception as chmod_err:
+                logging.warning(f"chmod für purpur.jar fehlgeschlagen: {chmod_err}")
+    except Exception as e:
+        logging.error(f"Download/Write error: {e}")
+        raise HTTPException(status_code=500, detail="Download failed.")
+
+    # 6. RAM-Konfiguration speichern
+    try:
+        save_server_config(servername, ram, str(port))
+    except Exception as e:
+        logging.error(f"Failed to save RAM config: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save RAM config.")
+
+    # 7. Initial-Run für EULA-Generierung
+    eula_path = safe_server_path(servername, "eula.txt")
+    try:
+        logging.info(f"Starting initial run for server {servername} with {ram}MB RAM on port {port}")
+        process = subprocess.Popen([
+            "java", f"-Xmx{ram}M", "-jar", "purpur.jar", "nogui"
+        ], cwd=base_path, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        import time
+        time.sleep(10)
+        try:
+            process.stdin.write("stop\n")
+            process.stdin.flush()
+            process.wait(timeout=10)
+            logging.info(f"Initial run completed gracefully for {servername}")
+        except Exception:
+            process.kill()
+            process.wait()
+            logging.info(f"Initial run force-killed for {servername}")
+        
+        # 8. Port in server.properties setzen
+        try:
+            set_server_port(servername, port)
+            logging.info(f"Set port {port} for server {servername}")
+        except Exception as e:
+            logging.error(f"Failed to set port for {servername}: {e}")
+            raise HTTPException(status_code=500, detail="Failed to set server port")
+        
+        # 9. HAProxy Konfiguration aktualisieren
+        try:
+            proxy_success = proxy_manager.add_server_proxy(servername, port)
+            if proxy_success:
+                logging.info(f"Added HAProxy configuration for {servername} on port {port}")
+            else:
+                logging.warning(f"Failed to add HAProxy configuration for {servername}")
+        except Exception as e:
+            logging.warning(f"HAProxy configuration failed for {servername}: {e}")
+            # Dies ist nicht kritisch für die Server-Erstellung
+        
+        # 10. EULA automatisch akzeptieren wenn gewünscht
+        if accept_eula:
+            if not os.path.exists(eula_path):
+                with open(eula_path, "w") as f:
+                    f.write("#By changing the setting below to TRUE you are indicating your agreement to our EULA (https://account.mojang.com/documents/minecraft_eula).\n")
+                    f.write("#Mon Jan 01 00:00:00 UTC 2024\n")
+                    f.write("eula=true\n")
+                logging.info(f"Created and accepted EULA file for {servername}")
+            else:
+                # EULA auf true setzen
+                with open(eula_path, "r") as f:
+                    lines = f.readlines()
+                with open(eula_path, "w") as f:
+                    for line in lines:
+                        if line.startswith("eula="):
+                            f.write("eula=true\n")
+                        else:
+                            f.write(line)
+                logging.info(f"Accepted EULA for {servername}")
+        else:
+            # EULA-Datei erstellen aber nicht akzeptieren
+            if not os.path.exists(eula_path):
+                with open(eula_path, "w") as f:
+                    f.write("#By changing the setting below to TRUE you are indicating your agreement to our EULA (https://account.mojang.com/documents/minecraft_eula).\n")
+                    f.write("#Mon Jan 01 00:00:00 UTC 2024\n")
+                    f.write("eula=false\n")
+                logging.info(f"Created EULA file for {servername} (not accepted)")
+    except Exception as e:
+        logging.error(f"Initial run/EULA error: {e}")
+        if not accept_eula:
+            return JSONResponse(content={
+                "message": "Server created successfully. Please accept the EULA manually.",
+                "server_name": servername,
+                "port": port,
+                "eula_required": True
+            })
+        else:
+            raise HTTPException(status_code=500, detail="Failed to initialize server")
+
+    # 10. Server starten wenn EULA akzeptiert wurde
+    if accept_eula:
+        try:
+            start_result = start_server_internal(servername, current_user)
+            if isinstance(start_result, JSONResponse):
+                return JSONResponse(content={
+                    "message": "Server created but failed to start. Please try starting manually.",
+                    "server_name": servername,
+                    "port": port,
+                    "eula_accepted": True
+                })
+            elif isinstance(start_result, dict) and start_result.get("status") == "already running":
+                return JSONResponse(content={
+                    "message": "Server created and is running!",
+                    "server_name": servername,
+                    "port": port,
+                    "status": "running",
+                    "eula_accepted": True
+                })
+            else:
+                return JSONResponse(content={
+                    "message": "Server created and started successfully!",
+                    "server_name": servername,
+                    "port": port,
+                    "status": "starting",
+                    "eula_accepted": True
+                })
+        except Exception as e:
+            logging.error(f"Start error: {e}")
+            return JSONResponse(content={
+                "message": "Server created with EULA accepted, but failed to start automatically.",
+                "server_name": servername,
+                "port": port,
+                "eula_accepted": True
+            })
+    else:
+        return JSONResponse(content={
+            "message": "Server created successfully. Please accept the EULA and start manually.",
+            "server_name": servername,
+            "port": port,
+            "eula_required": True
+        })
 
 @router.post("/server/create")
 def create_server(
@@ -486,38 +749,52 @@ def create_server(
     ram: str = Form(default="2048"),
     current_user: dict = Depends(get_current_user)
 ):
+    import json
+    # 1. Validierung Servername und RAM
     if not is_valid_servername(servername):
         raise HTTPException(status_code=400, detail="Invalid servername")
-    # RAM-Validierung
     try:
         ram_int = int(ram)
         if ram_int < 512 or ram_int > 8192:
             raise HTTPException(status_code=400, detail="RAM must be between 512MB and 8192MB")
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid RAM value")
-    base_path = safe_server_path(servername)
-    jar_path = safe_server_path(servername, "purpur.jar")
-    os.makedirs(base_path, exist_ok=True)
+
+    # 2. Zielordner anlegen (vor jeglicher weiterer Aktion!)
+    mc_servers_dir = os.environ.get("MC_SERVERS_DIR", os.path.join(os.getcwd(), "mc_servers"))
+    base_path = os.path.abspath(os.path.join(mc_servers_dir, servername))
     try:
-        with requests.get(purpur_url, stream=True, timeout=30) as r:
-            r.raise_for_status()
-            with tempfile.NamedTemporaryFile(delete=False) as tmp:
-                for chunk in r.iter_content(chunk_size=8192):
-                    tmp.write(chunk)
-                tmp_path = tmp.name
-        shutil.move(tmp_path, jar_path)
-        # Setze Ausführberechtigung für purpur.jar (Linux/WSL)
-        try:
-            if os.name != "nt":
+        os.makedirs(base_path, exist_ok=True)
+    except Exception as e:
+        logging.error(f"Could not create server directory {base_path}: {e}")
+        raise HTTPException(status_code=500, detail="Could not create server directory.")
+
+    # 3. Download purpur.jar
+    jar_path = os.path.join(base_path, "purpur.jar")
+    try:
+        curl_cmd = ["curl", "-L", "-o", jar_path, purpur_url]
+        result = subprocess.run(curl_cmd, capture_output=True, text=True)
+        if result.returncode != 0 or not os.path.exists(jar_path):
+            logging.error(f"curl Fehler: {result.stderr}")
+            raise HTTPException(status_code=500, detail="Download failed.")
+        if os.name != "nt":
+            try:
                 os.chmod(jar_path, 0o755)
-        except Exception as chmod_err:
-            logging.warning(f"chmod für purpur.jar fehlgeschlagen: {chmod_err}")
-    except Exception:
-        # Keine internen Fehler an den Client
+            except Exception as chmod_err:
+                logging.warning(f"chmod für purpur.jar fehlgeschlagen: {chmod_err}")
+    except Exception as e:
+        logging.error(f"Download/Write error: {e}")
         raise HTTPException(status_code=500, detail="Download failed.")
-    # Speichere die RAM-Konfiguration
-    save_server_config(servername, ram)
-    # Initial-Run um EULA-Datei zu generieren
+
+    # 4. RAM-Konfiguration speichern
+    try:
+        save_server_config(servername, ram)
+    except Exception as e:
+        logging.error(f"Failed to save RAM config: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save RAM config.")
+
+    # 5. Initial-Run für EULA-Generierung
+    eula_path = safe_server_path(servername, "eula.txt")
     try:
         logging.info(f"Starting initial run for server {servername} with {ram}MB RAM")
         process = subprocess.Popen([
@@ -530,45 +807,53 @@ def create_server(
             process.stdin.flush()
             process.wait(timeout=10)
             logging.info(f"Initial run completed gracefully for {servername}")
-        except subprocess.TimeoutExpired:
+        except Exception:
             process.kill()
             process.wait()
             logging.info(f"Initial run force-killed for {servername}")
-        eula_path = safe_server_path(servername, "eula.txt")
+        # EULA-Datei prüfen/erstellen
         if not os.path.exists(eula_path):
             with open(eula_path, "w") as f:
                 f.write("#By changing the setting below to TRUE you are indicating your agreement to our EULA (https://account.mojang.com/documents/minecraft_eula).\n")
                 f.write("#Mon Jan 01 00:00:00 UTC 2024\n")
                 f.write("eula=false\n")
             logging.info(f"Created default EULA file for {servername}")
-    except Exception:
-        # Keine internen Fehler an den Client
-        eula_path = safe_server_path(servername, "eula.txt")
+    except Exception as e:
+        logging.error(f"Initial run/EULA error: {e}")
+        # Fallback: EULA-Datei anlegen
         try:
             with open(eula_path, "w") as f:
                 f.write("#By changing the setting below to TRUE you are indicating your agreement to our EULA (https://account.mojang.com/documents/minecraft_eula).\n")
                 f.write("#Mon Jan 01 00:00:00 UTC 2024\n")
                 f.write("eula=false\n")
             logging.info(f"Created fallback EULA file for {servername}")
-        except Exception:
-            pass
-    # Versuche, den Server direkt zu starten (Backend-Lösung)
+        except Exception as e2:
+            logging.error(f"Could not create fallback EULA: {e2}")
+
+    # 6. Server starten (optional, Backend-Lösung)
     try:
-        start_result = start_server(servername, current_user)
+        start_result = start_server_internal(servername, current_user)
         if isinstance(start_result, dict) and start_result.get("status") == "already running":
             return JSONResponse(content={"message": "Server created and already running."})
         elif isinstance(start_result, dict) and start_result.get("error"):
             return JSONResponse(content={"message": "Server created, but failed to start."})
         else:
             return JSONResponse(content={"message": "Server created and started."})
-    except Exception:
+    except Exception as e:
+        logging.error(f"Start error: {e}")
         return JSONResponse(content={"message": "Server created, but failed to start automatically. Please accept the EULA and start the server manually."})
 
 @router.post("/server/accept_eula")
 def accept_eula(servername: str = Form(...), current_user: dict = Depends(get_current_user)):
+    # Check if server directory exists
+    server_dir = safe_server_path(servername)
+    if not os.path.exists(server_dir):
+        raise HTTPException(status_code=404, detail="Server directory not found")
+    
     eula_path = safe_server_path(servername, "eula.txt")
     if not os.path.exists(eula_path):
         raise HTTPException(status_code=404, detail="eula.txt not found")
+    
     with open(eula_path, "r") as f:
         lines = f.readlines()
     with open(eula_path, "w") as f:
@@ -584,6 +869,18 @@ def delete_server(servername: str, current_user: dict = Depends(get_current_user
     base_path = safe_server_path(servername)
     if not os.path.exists(base_path):
         raise HTTPException(status_code=404, detail="Server not found")
+    
+    # HAProxy Konfiguration entfernen
+    try:
+        proxy_success = proxy_manager.remove_server_proxy(servername)
+        if proxy_success:
+            logging.info(f"Removed HAProxy configuration for {servername}")
+        else:
+            logging.warning(f"Failed to remove HAProxy configuration for {servername}")
+    except Exception as e:
+        logging.warning(f"HAProxy cleanup failed for {servername}: {e}")
+        # Dies ist nicht kritisch für die Server-Löschung
+    
     try:
         shutil.rmtree(base_path)
         return { "message": f"Server '{servername}' deleted."}
