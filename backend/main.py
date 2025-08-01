@@ -1,6 +1,8 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Request, Form
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Form, Body
 from auth import get_current_user
+
 app = FastAPI()
+
 # Endpoint to validate token and get current user
 @app.get("/me")
 def me(current_user: dict = Depends(get_current_user)):
@@ -28,7 +30,6 @@ def validate_password(password: str) -> bool:
 
 # Rate limiting
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -107,8 +108,6 @@ def change_user(
     }
 
 # Endpunkt: Sicherheitsfrage abfragen
-from fastapi import Body
-
 @app.post("/get_security_question")
 def api_get_security_question(username: str = Body(...)):
     question = get_security_question(username)
