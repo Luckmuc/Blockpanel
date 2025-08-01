@@ -39,8 +39,20 @@ services:
       context: ./proxy
       dockerfile: Dockerfile
     ports:
+      # HAProxy Stats Interface (localhost only)
+      - "127.0.0.1:8404:8404"
+      # Standard Minecraft Java Ports
       - "25565-25600:25565-25600"
-      - "8404:8404"
+      # Minecraft Bedrock Ports
+      - "19132-19200:19132-19200"
+      # Flexible User Port Ranges
+      - "1024-1104:1024-1104"    # User range 1 (excluding 1105)
+      - "1106-1199:1106-1199"    # User range 1b (after frontend port)
+      - "1200-1399:1200-1399"    # User range 2 (includes 1234, 1106)
+      - "3000-3199:3000-3199"    # User range 3
+      - "4000-4199:4000-4199"    # User range 4
+      - "7000-7199:7000-7199"    # User range 5
+      - "9000-9199:9000-9199"    # User range 6
     volumes:
       - ./proxy:/usr/local/etc/haproxy:rw
     networks:

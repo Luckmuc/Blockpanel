@@ -9,7 +9,7 @@ import StorageIcon from "@mui/icons-material/Storage";
 import ExtensionIcon from "@mui/icons-material/Extension";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import LogoutIcon from "@mui/icons-material/Logout";
-import { fetchServers, startServer, acceptEula, deleteServer, stopServer, createAndStartServer, checkPortAvailability } from "../api/servers";
+import { fetchServers, startServer, acceptEula, deleteServer, stopServer, createAndStartServer, validatePort, suggestFreePort } from "../api/servers";
 import { checkServerPort } from "../api/servers";
 import ServerStatusPanel from "./ServerStatusPanel";
 import Dialog from "@mui/material/Dialog";
@@ -132,11 +132,110 @@ const PanelServers: React.FC = () => {
   const [newPort, setNewPort] = useState("25565");
   const [newVersion, setNewVersion] = useState(SERVER_VERSIONS[0].version);
   const [creating, setCreating] = useState(false);
+  
+  // Port validation state
+  const [portValidation, setPortValidation] = useState<{
+    isValidating: boolean;
+    isValid: boolean;
+    message: string;
+    suggestedPort?: number;
+  }>({
+    isValidating: false,
+    isValid: true,
+    message: "",
+    suggestedPort: undefined
+  });
+  
   const [portConflictDialog, setPortConflictDialog] = useState<{
     open: boolean;
     suggestedPort: number;
     requestedPort: number;
   }>({ open: false, suggestedPort: 25566, requestedPort: 25565 });
+
+  // Port validation function
+  const validatePortInput = async (port: string) => {
+    const portNum = parseInt(port);
+    
+    if (isNaN(portNum)) {
+      setPortValidation({
+        isValidating: false,
+        isValid: false,
+        message: "Port must be a number",
+        suggestedPort: undefined
+      });
+      return;
+    }
+
+    if (portNum < 1 || portNum > 65535) {
+      setPortValidation({
+        isValidating: false,
+        isValid: false,
+        message: "Port must be between 1 and 65535",
+        suggestedPort: undefined
+      });
+      return;
+    }
+
+    setPortValidation({
+      isValidating: true,
+      isValid: true,
+      message: "Checking port availability...",
+      suggestedPort: undefined
+    });
+
+    try {
+      const result = await validatePort(portNum, token);
+      if (result.valid) {
+        setPortValidation({
+          isValidating: false,
+          isValid: true,
+          message: "Port is available",
+          suggestedPort: undefined
+        });
+      } else {
+        // Get a suggestion
+        const suggestion = await suggestFreePort(portNum, token);
+        setPortValidation({
+          isValidating: false,
+          isValid: false,
+          message: result.reason || "Port is not available",
+          suggestedPort: suggestion.suggested_port
+        });
+      }
+    } catch (err) {
+      setPortValidation({
+        isValidating: false,
+        isValid: false,
+        message: "Failed to validate port",
+        suggestedPort: undefined
+      });
+    }
+  };
+
+  // Handler for port change with validation
+  const handlePortChange = (newPort: string) => {
+    setNewPort(newPort);
+    
+    // Debounce validation to avoid too many API calls
+    const timeoutId = setTimeout(() => {
+      validatePortInput(newPort);
+    }, 500);
+    
+    return () => clearTimeout(timeoutId);
+  };
+
+  // Handler for accepting suggested port
+  const handleAcceptSuggestedPortFromValidation = () => {
+    if (portValidation.suggestedPort) {
+      setNewPort(portValidation.suggestedPort.toString());
+      setPortValidation({
+        isValidating: false,
+        isValid: true,
+        message: "",
+        suggestedPort: undefined
+      });
+    }
+  };
 
   // Handler for starting server
   const handleStartServer = async (server: string) => {
@@ -233,26 +332,34 @@ const PanelServers: React.FC = () => {
       return;
     }
 
-    // Check port availability first
+    // Validate port one final time before creating
     const portNum = parseInt(newPort);
     if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
       setError("Invalid port number. Must be between 1 and 65535.");
       return;
     }
 
+    // Check if port validation indicates the port is invalid
+    if (!portValidation.isValid && !portValidation.isValidating) {
+      setError(portValidation.message);
+      return;
+    }
+
+    // Final port validation via API
     try {
-      const portCheck = await checkPortAvailability(portNum, token);
-      if (!portCheck.available) {
-        // Show port conflict dialog
+      const result = await validatePort(portNum, token);
+      if (!result.valid) {
+        // Show port conflict dialog with suggestion
+        const suggestion = await suggestFreePort(portNum, token);
         setPortConflictDialog({
           open: true,
-          suggestedPort: portCheck.suggested_port,
+          suggestedPort: suggestion.suggested_port,
           requestedPort: portNum
         });
         return;
       }
     } catch (err) {
-      setError("Failed to check port availability.");
+      setError("Failed to validate port availability.");
       return;
     }
 
@@ -269,9 +376,19 @@ const PanelServers: React.FC = () => {
   };
 
   // Handler to accept port suggestion and create server
-  const handleAcceptSuggestedPort = () => {
-    setNewPort(portConflictDialog.suggestedPort.toString());
+  const handleAcceptSuggestedPort = async () => {
+    const suggestedPort = portConflictDialog.suggestedPort;
+    setNewPort(suggestedPort.toString());
     setPortConflictDialog({ open: false, suggestedPort: 25566, requestedPort: 25565 });
+    
+    // Update port validation state to show new port is valid
+    setPortValidation({
+      isValidating: false,
+      isValid: true,
+      message: "Port is available",
+      suggestedPort: undefined
+    });
+    
     // Re-trigger creation with new port
     setTimeout(() => handleCreate(), 100);
   };
@@ -345,6 +462,17 @@ const PanelServers: React.FC = () => {
       setNewRam("2048");
       setNewPort("25565");
       setNewVersion(SERVER_VERSIONS[0].version);
+      
+      // Reset and validate default port
+      setPortValidation({
+        isValidating: false,
+        isValid: true,
+        message: "",
+        suggestedPort: undefined
+      });
+      
+      // Validate the default port
+      setTimeout(() => validatePortInput("25565"), 100);
       setPendingServerCreation(null);
       
       // Refresh server list
@@ -567,11 +695,39 @@ const PanelServers: React.FC = () => {
                 <TextField
                   label="Port"
                   value={newPort}
-                  onChange={e => setNewPort(e.target.value)}
+                  onChange={e => handlePortChange(e.target.value)}
                   size="small"
                   type="number"
                   inputProps={{ min: 1, max: 65535 }}
-                  helperText="Default: 25565"
+                  helperText={
+                    portValidation.isValidating ? (
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <CircularProgress size={12} />
+                        {portValidation.message}
+                      </Box>
+                    ) : portValidation.isValid ? (
+                      portValidation.message || "Default: 25565"
+                    ) : (
+                      <Box>
+                        <Typography variant="caption" color="error">
+                          {portValidation.message}
+                        </Typography>
+                        {portValidation.suggestedPort && (
+                          <Box>
+                            <Button
+                              size="small"
+                              variant="text"
+                              onClick={handleAcceptSuggestedPortFromValidation}
+                              sx={{ p: 0, fontSize: '0.7rem', textTransform: 'none' }}
+                            >
+                              Use {portValidation.suggestedPort}
+                            </Button>
+                          </Box>
+                        )}
+                      </Box>
+                    )
+                  }
+                  error={!portValidation.isValid && !portValidation.isValidating}
                   sx={{ minWidth: 120 }}
                 />
                 <TextField

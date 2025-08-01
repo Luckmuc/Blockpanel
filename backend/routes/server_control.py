@@ -12,8 +12,189 @@ import socket
 import tempfile
 import logging
 from proxy_manager import proxy_manager
+import threading
+import time
 
 router = APIRouter()
+
+def is_port_open(host: str, port: int, timeout: float = 0.5) -> bool:
+    """Check if a port is open on the given host"""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(timeout)
+            result = sock.connect_ex((host, port))
+            return result == 0
+    except Exception:
+        return False
+
+def scan_port_range(start_port: int, end_port: int, host: str = "localhost") -> set:
+    """Scan a range of ports to find which ones are in use"""
+    used_ports = set()
+    
+    def scan_port(port):
+        if is_port_open(host, port, timeout=0.1):
+            used_ports.add(port)
+    
+    # Use threading for faster scanning
+    threads = []
+    for port in range(start_port, min(end_port + 1, 65536)):
+        thread = threading.Thread(target=scan_port, args=(port,))
+        threads.append(thread)
+        thread.start()
+        
+        # Limit concurrent threads to avoid overwhelming the system
+        if len(threads) >= 50:
+            for t in threads:
+                t.join()
+            threads = []
+    
+    # Wait for remaining threads
+    for t in threads:
+        t.join()
+    
+    return used_ports
+
+def is_valid_port(port: int) -> tuple[bool, str]:
+    """Check if port is valid and not reserved"""
+    # Port range validation
+    if not (1 <= port <= 65535):
+        return False, "Port must be between 1 and 65535"
+    
+    # Reserved system ports (avoid conflicts)
+    reserved_ports = {
+        22: "SSH",
+        25: "SMTP", 
+        53: "DNS",
+        80: "HTTP",
+        443: "HTTPS",
+        993: "IMAPS",
+        995: "POP3S",
+        1105: "Blockpanel Frontend",
+        8000: "Blockpanel Backend",
+        8404: "HAProxy Stats",
+        3306: "MySQL",
+        5432: "PostgreSQL", 
+        6379: "Redis",
+        27017: "MongoDB",
+    }
+    
+    # Check if port is reserved
+    if port in reserved_ports:
+        return False, f"Port reserved for {reserved_ports[port]}"
+        
+    # Check if port is in dangerous range (system ports)
+    if 1 <= port <= 1023:
+        return False, "System ports (1-1023) are not allowed"
+        
+    return True, ""
+
+def get_minecraft_server_ports() -> set:
+    """Get all ports currently used by Minecraft servers"""
+    used_ports = set()
+    mc_servers_dir = os.environ.get("MC_SERVERS_DIR", os.path.join(os.getcwd(), "mc_servers"))
+    
+    if not os.path.exists(mc_servers_dir):
+        return used_ports
+    
+    for server_name in os.listdir(mc_servers_dir):
+        server_path = os.path.join(mc_servers_dir, server_name)
+        if os.path.isdir(server_path):
+            properties_file = os.path.join(server_path, "server.properties")
+            if os.path.exists(properties_file):
+                try:
+                    with open(properties_file, 'r') as f:
+                        for line in f:
+                            if line.startswith('server-port='):
+                                port = int(line.split('=')[1].strip())
+                                used_ports.add(port)
+                                break
+                except (ValueError, IOError):
+                    continue
+    
+    return used_ports
+
+@router.get("/server/ports/validate")
+def validate_port(port: int, current_user: dict = Depends(get_current_user)):
+    """Validate if a port can be used for a new server"""
+    # Check if port is valid
+    valid, reason = is_valid_port(port)
+    if not valid:
+        suggestion = find_free_port(25565)
+        return {
+            "valid": False,
+            "reason": reason,
+            "suggestion": suggestion,
+            "port_status": "invalid"
+        }
+    
+    # Check if port is in use (live scan)
+    if is_port_open("localhost", port):
+        suggestion = find_free_port(port)
+        return {
+            "valid": False,
+            "reason": f"Port {port} is already in use",
+            "suggestion": suggestion,
+            "port_status": "in_use"
+        }
+    
+    return {
+        "valid": True,
+        "port": port,
+        "port_status": "available"
+    }
+
+@router.get("/server/ports/scan")
+def scan_ports(start: int = 25565, end: int = 25600, current_user: dict = Depends(get_current_user)):
+    """Scan a range of ports to check availability"""
+    try:
+        if end - start > 1000:
+            raise HTTPException(status_code=400, detail="Port range too large (max 1000 ports)")
+        
+        used_ports = scan_port_range(start, end)
+        minecraft_ports = get_minecraft_server_ports()
+        
+        results = []
+        for port in range(start, min(end + 1, 65536)):
+            valid, reason = is_valid_port(port)
+            status = "invalid"
+            
+            if valid:
+                if port in used_ports:
+                    status = "in_use"
+                    if port in minecraft_ports:
+                        status = "minecraft_server"
+                else:
+                    status = "available"
+            
+            results.append({
+                "port": port,
+                "status": status,
+                "reason": reason if not valid else None
+            })
+        
+        return {
+            "scan_range": f"{start}-{end}",
+            "total_ports": len(results),
+            "available_count": len([r for r in results if r["status"] == "available"]),
+            "results": results
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Port scan failed: {str(e)}")
+
+@router.get("/server/ports/suggest")
+def suggest_free_port(preferred: int = 25565, current_user: dict = Depends(get_current_user)):
+    """Suggest a free port starting from the preferred port"""
+    suggestion = find_free_port(preferred)
+    valid, reason = is_valid_port(suggestion)
+    
+    return {
+        "suggested_port": suggestion,
+        "valid": valid,
+        "reason": reason if not valid else None,
+        "checked_from": preferred
+    }
+@router.get("/server/portcheck")
 def check_server_port(servername: str, current_user: dict = Depends(get_current_user)):
     """
     Prüft, ob der Minecraft-Server-Port erreichbar ist (TCP connect).
@@ -325,15 +506,38 @@ def get_used_ports():
                 pass
     return used_ports
 
-def find_free_port(start_port: int = 25565):
-    """Find the next free port starting from start_port"""
-    used_ports = get_used_ports()
-    port = start_port
-    while port in used_ports:
-        port += 1
-        if port > 65535:  # Max port number
-            raise HTTPException(status_code=500, detail="No free ports available")
-    return port
+def find_free_port(start_port: int = 25565, max_attempts: int = 1000):
+    """Find the next free port starting from start_port with improved scanning"""
+    for attempt in range(max_attempts):
+        port = start_port + attempt
+        
+        # Check if port is valid
+        valid, _ = is_valid_port(port)
+        if not valid:
+            continue
+            
+        # Check if port is actually available
+        if not is_port_open("localhost", port):
+            return port
+    
+    # If no port found in range, try random ports in valid ranges
+    import random
+    valid_ranges = [
+        (1024, 5000),
+        (25565, 25600), 
+        (19132, 19200),
+        (7000, 8000),
+        (9000, 10000)
+    ]
+    
+    for start, end in valid_ranges:
+        for _ in range(100):  # Try 100 random ports in each range
+            port = random.randint(start, end)
+            valid, _ = is_valid_port(port)
+            if valid and not is_port_open("localhost", port):
+                return port
+    
+    raise HTTPException(status_code=500, detail="No free ports available")
 
 def set_server_port(servername: str, port: int):
     """Set the port in server.properties"""
