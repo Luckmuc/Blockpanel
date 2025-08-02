@@ -89,7 +89,7 @@ const PanelServers: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      await fetch('/logout', {
+      await fetch('/api/logout', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });

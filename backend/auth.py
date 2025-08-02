@@ -90,8 +90,11 @@ def set_new_user(username: str, password: str, security_question: str = None, se
         user_obj["security_question"] = security_question
         user_obj["security_answer"] = pwd_context.hash(security_answer)
     users[username] = user_obj
-    # Entferne ggf. alten admin-User
-    if "admin" in users and users["admin"].get("must_change", False):
+    # Setze must_change für alle User auf False (nur zur Sicherheit)
+    for u in users.values():
+        u["must_change"] = False
+    # Entferne immer den alten admin-User, falls vorhanden
+    if "admin" in users:
         del users["admin"]
     save_users(users)
     return True

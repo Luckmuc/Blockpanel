@@ -27,7 +27,7 @@ const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
     
     // Validate token by calling /me endpoint
-    fetch('/me', {
+    fetch('/api/me', {
       headers: { Authorization: `Bearer ${token}` }
     })
     .then(res => {
