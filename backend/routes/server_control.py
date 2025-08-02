@@ -67,7 +67,7 @@ def is_valid_port(port: int) -> tuple[bool, str]:
         22: "SSH",
         25: "SMTP", 
         53: "DNS",
-        80: "HTTP",
+        # 80: "HTTP",  # Port 80 is not used, only 1105 is reserved for HTTP
         443: "HTTPS",
         993: "IMAPS",
         995: "POP3S",

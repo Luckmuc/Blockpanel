@@ -24,7 +24,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "1105:80"
+      - "1105:1105"
     environment:
       - NODE_ENV=production
     restart: unless-stopped
