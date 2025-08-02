@@ -1,3 +1,4 @@
+
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, BackgroundTasks, Form
 from auth import get_current_user
 import subprocess
@@ -12,6 +13,7 @@ import socket
 import tempfile
 import logging
 from proxy_manager import proxy_manager
+from port_allocator import port_allocator
 import threading
 import time
 
@@ -119,21 +121,21 @@ def validate_port(port: int, current_user: dict = Depends(get_current_user)):
     # Check if port is valid
     valid, reason = is_valid_port(port)
     if not valid:
-        suggestion = find_free_port(25565)
+        suggestion = port_allocator.get_available_ports(1)
         return {
             "valid": False,
             "reason": reason,
-            "suggestion": suggestion,
+            "suggestion": suggestion[0] if suggestion else None,
             "port_status": "invalid"
         }
     
     # Check if port is in use (live scan)
     if is_port_open("localhost", port):
-        suggestion = find_free_port(port)
+        suggestions = port_allocator.get_available_ports(1)
         return {
             "valid": False,
             "reason": f"Port {port} is already in use",
-            "suggestion": suggestion,
+            "suggestion": suggestions[0] if suggestions else None,
             "port_status": "in_use"
         }
     
@@ -141,6 +143,20 @@ def validate_port(port: int, current_user: dict = Depends(get_current_user)):
         "valid": True,
         "port": port,
         "port_status": "available"
+    }
+
+@router.get("/server/ports/allocations")
+def get_port_allocations(current_user: dict = Depends(get_current_user)):
+    """Get current port allocation status"""
+    return port_allocator.get_allocation_status()
+
+@router.get("/server/ports/available")
+def get_available_ports(count: int = 10, current_user: dict = Depends(get_current_user)):
+    """Get available ports for new servers"""
+    available = port_allocator.get_available_ports(count)
+    return {
+        "available_ports": available,
+        "count": len(available)
     }
 
 @router.get("/server/ports/scan")
@@ -221,19 +237,18 @@ def check_server_port(servername: str, current_user: dict = Depends(get_current_
         except Exception:
             continue
     return {"open": result, "port": port}
-import subprocess
-import os
-from fastapi.responses import JSONResponse
-import glob
-import psutil
-import requests
-import shutil
-import re
-import socket
-import tempfile
-import logging
 
-
+@router.get("/server/uptime")
+def get_server_uptime(servername: str, current_user: dict = Depends(get_current_user)):
+    pid = get_server_proc(servername)
+    uptime = None
+    if pid:
+        try:
+            p = psutil.Process(pid)
+            uptime = int(time.time() - p.create_time())
+        except Exception:
+            uptime = None
+    return {"uptime": uptime}
 
 @router.get("/server/stats")
 def server_stats(servername: str, current_user: dict = Depends(get_current_user)):
@@ -761,7 +776,7 @@ def create_and_start_server(
     servername: str = Form(...),
     purpur_url: str = Form(...),
     ram: str = Form(default="2048"),
-    port: int = Form(default=25565),
+    port: int = Form(default=None),  # Optional port, will be auto-allocated if not provided
     accept_eula: bool = Form(default=True),
     current_user: dict = Depends(get_current_user)
 ):
@@ -779,14 +794,26 @@ def create_and_start_server(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid RAM value")
 
-    # 2. Port-Verfügbarkeit prüfen
-    used_ports = get_used_ports()
-    if port in used_ports:
-        free_port = find_free_port(port)
-        raise HTTPException(
-            status_code=409, 
-            detail=f"Port {port} is already in use. Suggested free port: {free_port}"
-        )
+    # 2. Port allocation - use dynamic allocation if no port specified
+    if port is None:
+        allocated_port = port_allocator.allocate_port(servername)
+        if allocated_port is None:
+            raise HTTPException(status_code=500, detail="No available ports for server creation")
+        port = allocated_port
+        logging.info(f"Auto-allocated port {port} for server {servername}")
+    else:
+        # Try to allocate the requested port
+        allocated_port = port_allocator.allocate_port(servername, port)
+        if allocated_port is None:
+            suggestions = port_allocator.get_available_ports(3)
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Port {port} is not available. Available ports: {suggestions}")
+        if allocated_port != port:
+            port = allocated_port
+            logging.info(f"Requested port not available, allocated port {port} for server {servername}")
+        else:
+            logging.info(f"Allocated requested port {port} for server {servername}")
 
     # 3. Check if server already exists
     mc_servers_dir = os.environ.get("MC_SERVERS_DIR", os.path.join(os.getcwd(), "mc_servers"))
@@ -854,9 +881,27 @@ def create_and_start_server(
         
         # 9. HAProxy Konfiguration aktualisieren
         try:
-            proxy_success = proxy_manager.add_server_proxy(servername, port)
+            proxy_success, allocated_port = proxy_manager.add_server_proxy(servername, port)
             if proxy_success:
-                logging.info(f"Added HAProxy configuration for {servername} on port {port}")
+                # Update port if it was changed by the allocator
+                if allocated_port != port:
+                    port = allocated_port
+                    # Update server.properties with the actually allocated port
+                    props_path = safe_server_path(servername, "server.properties")
+                    try:
+                        with open(props_path, "r") as f:
+                            lines = f.readlines()
+                        with open(props_path, "w") as f:
+                            for line in lines:
+                                if line.startswith("server-port="):
+                                    f.write(f"server-port={port}\n")
+                                else:
+                                    f.write(line)
+                        logging.info(f"Updated server.properties with allocated port {port}")
+                    except Exception as e:
+                        logging.error(f"Failed to update server.properties with allocated port: {e}")
+                
+                logging.info(f"Added HAProxy configuration for {servername} on port {allocated_port}")
             else:
                 logging.warning(f"Failed to add HAProxy configuration for {servername}")
         except Exception as e:
@@ -964,7 +1009,13 @@ def create_server(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid RAM value")
 
-    # 2. Zielordner anlegen (vor jeglicher weiterer Aktion!)
+    # 2. Port allocation - use dynamic allocation
+    port = port_allocator.allocate_port(servername)
+    if port is None:
+        raise HTTPException(status_code=500, detail="No available ports for server creation")
+    logging.info(f"Auto-allocated port {port} for server {servername}")
+
+    # 3. Zielordner anlegen (vor jeglicher weiterer Aktion!)
     mc_servers_dir = os.environ.get("MC_SERVERS_DIR", os.path.join(os.getcwd(), "mc_servers"))
     base_path = os.path.abspath(os.path.join(mc_servers_dir, servername))
     try:
@@ -1038,14 +1089,14 @@ def create_server(
     try:
         start_result = start_server_internal(servername, current_user)
         if isinstance(start_result, dict) and start_result.get("status") == "already running":
-            return JSONResponse(content={"message": "Server created and already running."})
+            return JSONResponse(content={"message": "Server created and already running.", "port": port})
         elif isinstance(start_result, dict) and start_result.get("error"):
-            return JSONResponse(content={"message": "Server created, but failed to start."})
+            return JSONResponse(content={"message": "Server created, but failed to start.", "port": port})
         else:
-            return JSONResponse(content={"message": "Server created and started."})
+            return JSONResponse(content={"message": "Server created and started.", "port": port})
     except Exception as e:
         logging.error(f"Start error: {e}")
-        return JSONResponse(content={"message": "Server created, but failed to start automatically. Please accept the EULA and start the server manually."})
+        return JSONResponse(content={"message": "Server created, but failed to start automatically. Please accept the EULA and start the server manually.", "port": port})
 
 @router.post("/server/accept_eula")
 def accept_eula(servername: str = Form(...), current_user: dict = Depends(get_current_user)):

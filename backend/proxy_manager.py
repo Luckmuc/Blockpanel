@@ -5,6 +5,7 @@ import os
 import subprocess
 import logging
 from typing import Dict, List
+from port_allocator import port_allocator
 
 logger = logging.getLogger(__name__)
 
@@ -14,11 +15,26 @@ class ProxyManager:
         self.config_path = config_path
         self.reload_script = reload_script
         
-    def add_server_proxy(self, server_name: str, port: int) -> bool:
+    def add_server_proxy(self, server_name: str, port: int = None) -> tuple[bool, int]:
         """
         Fügt einen neuen Minecraft Server zur HAProxy Konfiguration hinzu
+        Returns: (success, allocated_port)
         """
         try:
+            # Allocate port if not provided
+            if port is None:
+                port = port_allocator.allocate_port(server_name)
+                if port is None:
+                    logger.error(f"Could not allocate port for server {server_name}")
+                    return False, 0
+            else:
+                # Try to allocate specific port
+                allocated_port = port_allocator.allocate_port(server_name, port)
+                if allocated_port != port:
+                    logger.warning(f"Could not allocate requested port {port} for {server_name}, got {allocated_port}")
+                    if allocated_port is None:
+                        return False, 0
+                    port = allocated_port
             # Template für neuen Frontend/Backend
             frontend_config = f"""
 frontend minecraft_{server_name}
@@ -45,7 +61,7 @@ backend backend_{server_name}
             # Prüfe ob Server bereits existiert
             if f"frontend minecraft_{server_name}" in current_config:
                 logger.warning(f"Server {server_name} bereits in HAProxy Konfiguration")
-                return False
+                return True, port  # Return existing port
             
             # Füge neue Konfiguration hinzu
             new_config = current_config + frontend_config + backend_config
@@ -55,11 +71,19 @@ backend backend_{server_name}
                 f.write(new_config)
             
             # Lade HAProxy neu
-            return self._reload_haproxy()
+            if self._reload_haproxy():
+                logger.info(f"Successfully added proxy for {server_name} on port {port}")
+                return True, port
+            else:
+                # Rollback port allocation on failure
+                port_allocator.deallocate_port(server_name)
+                return False, 0
             
         except Exception as e:
             logger.error(f"Fehler beim Hinzufügen von Server {server_name}: {e}")
-            return False
+            # Rollback port allocation on failure
+            port_allocator.deallocate_port(server_name)
+            return False, 0
     
     def remove_server_proxy(self, server_name: str) -> bool:
         """
@@ -96,7 +120,13 @@ backend backend_{server_name}
                 f.writelines(new_lines)
             
             # Lade HAProxy neu
-            return self._reload_haproxy()
+            if self._reload_haproxy():
+                # Deallocate port after successful removal
+                port_allocator.deallocate_port(server_name)
+                logger.info(f"Successfully removed proxy for {server_name}")
+                return True
+            else:
+                return False
             
         except Exception as e:
             logger.error(f"Fehler beim Entfernen von Server {server_name}: {e}")

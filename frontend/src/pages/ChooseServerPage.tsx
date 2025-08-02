@@ -1,3 +1,4 @@
+import { API_BASE } from "../config/api";
 
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -69,7 +70,7 @@ const ChooseServerPage: React.FC = () => {
 
   // Helper: check if plugin already exists on server
   const checkPluginExists = async (server: string, pluginName: string) => {
-    const res = await fetch(`/api/server/plugins?servername=${encodeURIComponent(server)}`, {
+    const res = await fetch(`${API_BASE}/server/plugins?servername=${encodeURIComponent(server)}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     if (!res.ok) return false;
@@ -79,7 +80,7 @@ const ChooseServerPage: React.FC = () => {
 
   // Helper: check if server is running
   const checkServerRunning = async (server: string) => {
-    const res = await fetch(`/api/server/status?servername=${encodeURIComponent(server)}`, {
+    const res = await fetch(`${API_BASE}/server/status?servername=${encodeURIComponent(server)}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     if (!res.ok) return false;
@@ -89,7 +90,7 @@ const ChooseServerPage: React.FC = () => {
 
   // Helper: restart server
   const restartServer = async (server: string) => {
-    await fetch(`/api/server/restart?servername=${encodeURIComponent(server)}`, {
+    await fetch(`${API_BASE}/server/restart?servername=${encodeURIComponent(server)}`, {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
@@ -116,7 +117,7 @@ const ChooseServerPage: React.FC = () => {
       const formData = new FormData();
       const fileForUpload = new File([fileBuffer], file.name, { type: file.type });
       formData.append("file", fileForUpload);
-      const res = await fetch(`/api/server/plugins/upload?servername=${encodeURIComponent(server)}`, {
+      const res = await fetch(`${API_BASE}/server/plugins/upload?servername=${encodeURIComponent(server)}`, {
         method: "POST",
         body: formData,
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -184,7 +185,7 @@ const ChooseServerPage: React.FC = () => {
   ];
   const handleLogout = async () => {
     try {
-      await fetch('/logout', {
+      await fetch('/api/logout', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });

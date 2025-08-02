@@ -4,7 +4,7 @@ from auth import get_current_user
 app = FastAPI()
 
 # Endpoint to validate token and get current user
-@app.get("/me")
+@app.get("/api/me")
 def me(current_user: dict = Depends(get_current_user)):
     return {"username": current_user["username"]}
 from fastapi.security import OAuth2PasswordRequestForm
@@ -62,9 +62,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(server_control.router)
+app.include_router(server_control.router, prefix="/api")
 
-@app.post("/login")
+@app.post("/api/login")
 @limiter.limit("5/minute")
 def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     user = authenticate_user(form_data.username, form_data.password)
@@ -77,7 +77,7 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
         "must_change": user.get("must_change", False)
     }
 
-@app.post("/change_user")
+@app.post("/api/change_user")
 def change_user(
     username: str = Form(...),
     password: str = Form(...),
@@ -108,7 +108,7 @@ def change_user(
     }
 
 # Endpunkt: Sicherheitsfrage abfragen
-@app.post("/get_security_question")
+@app.post("/api/get_security_question")
 def api_get_security_question(username: str = Body(...)):
     question = get_security_question(username)
     if not question:
@@ -116,7 +116,7 @@ def api_get_security_question(username: str = Body(...)):
     return {"security_question": question}
 
 # Endpunkt: Passwort zurücksetzen
-@app.post("/reset_password")
+@app.post("/api/reset_password")
 def api_reset_password(
     username: str = Form(...),
     security_answer: str = Form(...),
@@ -129,7 +129,7 @@ def api_reset_password(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"message": "Passwort erfolgreich zurückgesetzt"}
-@app.post("/change_password")
+@app.post("/api/change_password")
 def change_password(
     old_password: str = Form(...),
     new_password: str = Form(...),
@@ -147,7 +147,7 @@ def change_password(
     save_users(users)
     return {"message": "Passwort geändert"}
 
-@app.post("/change_username")
+@app.post("/api/change_username")
 def change_username(
     new_username: str = Form(...),
     current_user: dict = Depends(get_current_user)
@@ -165,11 +165,11 @@ def change_username(
     save_users(users)
     return {"message": "Username geändert"}
 
-@app.get("/me")
+@app.get("/api/me")
 def read_users_me(current_user: dict = Depends(get_current_user)):
     return current_user
 
-@app.post("/logout")
+@app.post("/api/logout")
 def logout(current_user: dict = Depends(get_current_user)):
     # In einer Produktionsumgebung würden Sie hier das Token zur Blacklist hinzufügen
     return {"message": "Successfully logged out"}

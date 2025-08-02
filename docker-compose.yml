@@ -8,7 +8,8 @@ services:
       - "8000:8000"
     # Backend container exposes port range for Minecraft servers
     expose:
-      - "25565-25600"
+      - "25565-25700"  # Extended range for dynamic allocation
+      - "11000-11999"  # Additional range for special servers (avoiding frontend port 1105)
     env_file:
       - .env
     restart: unless-stopped
@@ -35,7 +36,9 @@ services:
       context: ./proxy
       dockerfile: Dockerfile
     ports:
-      - "25565-25600:25565-25600"
+      - "25565-25700:25565-25700"  # Extended range for dynamic allocation
+      - "11000-11999:11000-11999"  # Additional range for special servers
+      - "8404:8404"                # HAProxy stats interface
     volumes:
       - ./proxy:/usr/local/etc/haproxy:rw
     networks:

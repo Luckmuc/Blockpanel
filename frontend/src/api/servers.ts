@@ -7,7 +7,11 @@ export async function fetchServers(token: string | undefined): Promise<Server[]>
     const res = await axios.get(`${API_BASE}/server/list`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-    return res.data.servers;
+    if (res.data && Array.isArray(res.data.servers)) {
+      return res.data.servers;
+    } else {
+      return [];
+    }
   } catch (err) {
     return [];
   }
