@@ -1,22 +1,131 @@
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Box, Typography, Paper, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField } from "@mui/material";
+import {
+  Box, Typography, Paper, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, Tooltip, Slider, Chip, Stack
+} from "@mui/material";
+import TuneIcon from "@mui/icons-material/Tune";
+import StorageIcon from "@mui/icons-material/Storage";
+import ExtensionIcon from "@mui/icons-material/Extension";
+import LogoutIcon from "@mui/icons-material/Logout";
 import { deleteServer } from "../api/servers";
+import { setServerProperty } from "../api/serverProperties";
+import axios from "axios";
+import { API_BASE } from "../config/api";
 import { useAuth } from "../auth/AuthProvider";
+import { getServerStats } from "../api/servers";
+
+
+const SIDEBAR_WIDTH = 72;
+const SIDEBAR_EXPANDED = 200;
+const menuItems = [
+  { key: "servers", label: "Servers", icon: <StorageIcon fontSize="large" /> },
+  { key: "plugins", label: "Plugins", icon: <ExtensionIcon fontSize="large" /> },
+  { key: "controls", label: "Controls", icon: <TuneIcon fontSize="large" /> },
+];
 
 const ServerSettingsPage: React.FC = () => {
   const { servername } = useParams<{ servername: string }>();
-  const { token } = useAuth();
+  const { token, clearToken } = useAuth();
   const navigate = useNavigate();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // removed unused sidebarExpanded state
+
+  const [hovered, setHovered] = useState<string | undefined>(undefined);
+  // State for settings
+  const [maxPlayers, setMaxPlayers] = useState(20);
+  const [ramMb, setRamMb] = useState(2048);
+  const ramPresets = [1024, 2048, 3072, 4096, 8192];
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [restartDialogOpen, setRestartDialogOpen] = useState(false);
+  const [serverRunning, setServerRunning] = useState<boolean>(false);
+  // removed unused pendingSettings state
+
+  // Simulate fetching current settings (replace with real API call)
+  React.useEffect(() => {
+    // TODO: fetch real settings from backend
+    setMaxPlayers(20);
+    setRamMb(2048);
+    // Fetch server status
+    const fetchStatus = async () => {
+      try {
+        const stats = await getServerStats(servername ?? "", token ?? undefined);
+        setServerRunning(stats.status === "running");
+      } catch {
+        setServerRunning(false);
+      }
+    };
+    if (servername) fetchStatus();
+  }, [servername, token]);
+
+
+  // Save settings to backend
+  const saveSettings = async () => {
+    setSaveError(null);
+    try {
+      // Save max-players
+      await setServerProperty(servername ?? "", "max-players", String(maxPlayers), token ?? undefined);
+      // Save RAM (ramMb) via /server/ram/set
+      await axios.post(
+        `${API_BASE}/server/ram/set`,
+        new URLSearchParams({ servername: servername ?? "", ram: String(ramMb) }),
+        { headers: token ? { Authorization: `Bearer ${token ?? undefined}` } : {} }
+      );
+      // Simulate: if RAM or maxPlayers changed, restart required
+      return { restartRequired: true };
+    } catch (e: any) {
+      setSaveError(e?.response?.data?.detail || e?.message || 'Failed to save settings.');
+      return { restartRequired: false };
+    }
+  };
+
+  const handleSave = async () => {
+    setSaveLoading(true);
+    setSaveError(null);
+    const result = await saveSettings();
+    setSaveLoading(false);
+    if (result.restartRequired && serverRunning) {
+      setRestartDialogOpen(true);
+    }
+  };
+
+  const handleConfirmRestart = async () => {
+    setRestartDialogOpen(false);
+    setSaveLoading(true);
+    setSaveError(null);
+    try {
+      // Stop the server
+      await axios.post(
+        `${API_BASE}/server/stop?servername=${servername}`,
+        {},
+        { headers: token ? { Authorization: `Bearer ${token ?? undefined}` } : {} }
+      );
+      // Wait a bit for the server to stop
+      await new Promise(res => setTimeout(res, 2000));
+      // Start the server
+      await axios.post(
+        `${API_BASE}/server/start?servername=${servername}`,
+        {},
+        { headers: token ? { Authorization: `Bearer ${token ?? undefined}` } : {} }
+      );
+    } catch (e: any) {
+      setSaveError(e?.response?.data?.detail || e?.message || "Failed to restart server.");
+    }
+    setSaveLoading(false);
+  };
+
+  const handleCancelRestart = () => {
+    setRestartDialogOpen(false);
+  };
+
 
   const handleDelete = async () => {
     setDeleting(true);
     setError(null);
     try {
-      await deleteServer(servername ?? "", token || undefined);
+      await deleteServer(servername ?? "", token ?? undefined);
       setDeleting(false);
       setConfirmOpen(false);
       navigate("/servers");
@@ -26,35 +135,271 @@ const ServerSettingsPage: React.FC = () => {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (error) {
+      // ignore
+    } finally {
+      clearToken && clearToken();
+      navigate('/login');
+    }
+  };
+
+
   return (
-    <Box sx={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #0f2027 0%, #2c5364 100%)" }}>
-      <Paper sx={{ p: 5, borderRadius: 4, minWidth: 400, maxWidth: 600 }}>
-        <Typography variant="h5" sx={{ mb: 3, fontWeight: 700 }}>Server Settings: {servername}</Typography>
-        {/* Example settings, can be expanded */}
-        <Box sx={{ mb: 3 }}>
-          <TextField label="Max Players" type="number" size="small" sx={{ mb: 2, minWidth: 200 }} />
-          <TextField label="RAM (MB)" type="number" size="small" sx={{ mb: 2, minWidth: 200 }} />
-          <Button variant="outlined" sx={{ mb: 2 }}>
-            Assign Admins (coming soon)
-          </Button>
+    <Box
+      sx={{
+        minHeight: "100vh",
+        width: "100vw",
+        display: "flex",
+        background: "linear-gradient(135deg, #0f2027 0%, #2c5364 100%)",
+      }}
+    >
+      {/* Sidebar (EXACT copy from PanelServers.tsx) */}
+      <Box
+        sx={{
+          height: "100vh",
+          width: hovered ? SIDEBAR_EXPANDED : SIDEBAR_WIDTH,
+          transition: "width 0.25s cubic-bezier(.4,2,.6,1)",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          alignItems: "center",
+          background: "rgba(30,40,60,0.92)",
+          boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.37)",
+          borderTopRightRadius: 32,
+          borderBottomRightRadius: 32,
+          py: 3,
+        }}
+        onMouseLeave={() => setHovered(undefined)}
+      >
+        <Box sx={{ width: "100%", flex: 1 }}>
+          {menuItems.map((item) => (
+            <Tooltip key={item.key} title={item.label} placement="right">
+              <Box
+                onMouseEnter={() => setHovered(item.key)}
+                onMouseLeave={() => setHovered(undefined)}
+                onClick={() => {
+                  if (item.key === "servers") navigate("/servers");
+                  if (item.key === "plugins") navigate("/plugins");
+                  if (item.key === "controls") navigate("/controls");
+                }}
+                sx={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 2,
+                  px: 2,
+                  py: 1.5,
+                  cursor: "pointer",
+                  borderRadius: 2,
+                  background:
+                    hovered === item.key
+                      ? "linear-gradient(90deg, #1976d2 0%, #1e293b 100%)"
+                      : "none",
+                  color: hovered === item.key ? "#fff" : "#b0c4de",
+                  fontWeight: hovered === item.key ? 700 : 500,
+                  fontSize: 18,
+                  transition: "all 0.18s",
+                }}
+              >
+                {item.icon}
+                {hovered === item.key && (
+                  <Typography sx={{ ml: 2, fontWeight: 600, fontSize: 18 }}>{item.label}</Typography>
+                )}
+              </Box>
+            </Tooltip>
+          ))}
         </Box>
-        <Button variant="outlined" color="error" onClick={() => setConfirmOpen(true)} sx={{ mt: 2 }}>
-          Delete Server
-        </Button>
-        <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
-          <DialogTitle>Confirm Delete</DialogTitle>
-          <DialogContent>
-            <Typography>Are you sure you want to delete this server? This action cannot be undone.</Typography>
-            {error && <Typography color="error" sx={{ mt: 1 }}>{error}</Typography>}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setConfirmOpen(false)} disabled={deleting}>Cancel</Button>
-            <Button onClick={handleDelete} color="error" variant="contained" disabled={deleting}>
-              {deleting ? "Deleting..." : "Delete"}
+        <Box sx={{ width: "100%" }}>
+          <Tooltip title="Logout" placement="right">
+            <IconButton onClick={handleLogout} sx={{ color: "#b0c4de", mb: 1 }}>
+              <LogoutIcon fontSize="large" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      </Box>
+
+      {/* Main Content */}
+      <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <Paper sx={{ p: 5, borderRadius: 4, minWidth: 400, maxWidth: 600, background: '#1e293c' }}>
+          <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, color: '#fff' }}>Server Settings: {servername}</Typography>
+          {/* Example settings, can be expanded */}
+          <Box sx={{ mb: 3 }}>
+            {/* Max Players Slider */}
+            <Typography sx={{ mb: 1, fontWeight: 500, color: '#b0c4de' }}>Max Players</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <Slider
+                value={maxPlayers}
+                min={1}
+                max={30}
+                step={1}
+                onChange={(_, val) => setMaxPlayers(val as number)}
+                sx={{ flex: 1, mr: 2 }}
+                valueLabelDisplay="auto"
+                aria-label="Max Players"
+              />
+              <Box sx={{ minWidth: 40, textAlign: 'center', color: '#fff', fontWeight: 600 }}>{maxPlayers}</Box>
+            </Box>
+
+            {/* RAM Selection */}
+            <Typography sx={{ mb: 1, fontWeight: 500, color: '#b0c4de' }}>RAM</Typography>
+            <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+              {ramPresets.map((mb) => (
+                <Chip
+                  key={mb}
+                  label={`${mb / 1024} GB`}
+                  clickable
+                  color={ramMb === mb ? 'primary' : 'default'}
+                  onClick={() => setRamMb(mb)}
+                  sx={{ fontWeight: 600, color: ramMb === mb ? '#fff' : '#b0c4de', background: ramMb === mb ? 'linear-gradient(90deg, #1976d2 0%, #1e293b 100%)' : '#232b3b' }}
+                />
+              ))}
+            </Stack>
+            <TextField
+              label="Custom RAM (MB)"
+              type="number"
+              size="small"
+              sx={{ minWidth: 200 }}
+              value={ramMb}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRamMb(Number(e.target.value))}
+              inputProps={{ min: 256, max: 65536 }}
+              helperText="Enter a value or select a preset above."
+            />
+          </Box>
+          {saveError && <Typography color="error" sx={{ mb: 1 }}>{saveError}</Typography>}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', mt: 6 }}>
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={() => setConfirmOpen(true)}
+              sx={{ alignSelf: 'flex-start', minWidth: 120 }}
+            >
+              Delete Server
             </Button>
-          </DialogActions>
-        </Dialog>
-      </Paper>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleSave}
+              disabled={saveLoading}
+              sx={{ alignSelf: 'flex-end', minWidth: 120, position: 'relative' }}
+            >
+              {saveLoading ? (
+                <>
+                  <span style={{ opacity: 0 }}>{'Save'}</span>
+                  <span style={{
+                    position: 'absolute',
+                    left: '50%',
+                    top: '50%',
+                    transform: 'translate(-50%, -50%)',
+                  }}>
+                    <svg width="22" height="22" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg" stroke="#fff">
+                      <g fill="none" fillRule="evenodd" strokeWidth="4">
+                        <circle cx="22" cy="22" r="18" strokeOpacity=".5"/>
+                        <path d="M40 22c0-9.94-8.06-18-18-18">
+                          <animateTransform attributeName="transform" type="rotate" from="0 22 22" to="360 22 22" dur="1s" repeatCount="indefinite"/>
+                        </path>
+                      </g>
+                    </svg>
+                  </span>
+                </>
+              ) : 'Save'}
+            </Button>
+          </Box>
+          {/* Restart warning dialog */}
+          <Dialog
+            open={restartDialogOpen}
+            onClose={handleCancelRestart}
+            PaperProps={{
+              sx: {
+                background: '#1e293c',
+                color: '#fff',
+                borderRadius: 3,
+                boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+                minWidth: 400,
+                p: 2,
+              },
+            }}
+          >
+            <DialogTitle sx={{ color: '#fff', fontWeight: 700, fontSize: 22 }}>Server Restart Required</DialogTitle>
+            <DialogContent>
+              <Typography sx={{ color: '#b0c4de', mb: 2 }}>
+                Changing these settings requires a server restart. Are you sure you want to apply the changes and restart the server now?
+              </Typography>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleCancelRestart} disabled={saveLoading} sx={{ color: '#b0c4de' }}>Cancel</Button>
+              <Button onClick={handleConfirmRestart} color="error" variant="contained" disabled={saveLoading} sx={{ fontWeight: 600, minWidth: 120 }}>
+                Restart &amp; Apply
+              </Button>
+            </DialogActions>
+          </Dialog>
+          {/* Delete confirmation dialog with name input */}
+          <Dialog
+            open={confirmOpen}
+            onClose={() => setConfirmOpen(false)}
+            PaperProps={{
+              sx: {
+                background: '#1e293c',
+                color: '#fff',
+                borderRadius: 3,
+                boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+                minWidth: 400,
+                p: 2,
+              }
+            }}
+          >
+            <DialogTitle sx={{ fontWeight: 700, color: '#fff', textAlign: 'center', pb: 1 }}>
+              Confirm Delete
+            </DialogTitle>
+            <DialogContent sx={{ px: 3, pb: 2 }}>
+              <Typography color="error" sx={{ mb: 2, fontWeight: 500, textAlign: 'center' }}>
+                This action cannot be undone.<br />
+                To confirm, please type the server name below:
+              </Typography>
+              <TextField
+                autoFocus
+                fullWidth
+                label="Server Name"
+                value={error || ''}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setError(e.target.value)}
+                sx={{ mb: 2,
+                  '& .MuiInputBase-root': {
+                    background: 'rgba(30,40,60,0.92)',
+                    color: '#fff',
+                    borderRadius: 2,
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b0c4de',
+                  },
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#334155',
+                  },
+                }}
+                error={!!error && error !== servername}
+                helperText={error && error !== servername ? 'Name does not match.' : ''}
+                InputLabelProps={{ style: { color: '#b0c4de' } }}
+              />
+            </DialogContent>
+            <DialogActions sx={{ justifyContent: 'center', pb: 2 }}>
+              <Button onClick={() => setConfirmOpen(false)} disabled={deleting} sx={{ color: '#b0c4de' }}>Cancel</Button>
+              <Button
+                onClick={handleDelete}
+                color="error"
+                variant="contained"
+                disabled={deleting || error !== servername}
+                sx={{ minWidth: 100, fontWeight: 600 }}
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </Paper>
+      </Box>
     </Box>
   );
 };

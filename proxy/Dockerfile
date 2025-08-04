@@ -20,7 +20,7 @@ RUN chmod +x /usr/local/bin/reload-haproxy.sh
 RUN addgroup -g 99 -S haproxy 2>/dev/null || true
 RUN adduser -u 99 -D -S -G haproxy haproxy 2>/dev/null || true
 
-EXPOSE 25565-25600 8404
+EXPOSE 25565-25575 8404
 
 # Switch back to haproxy user
 USER haproxy
