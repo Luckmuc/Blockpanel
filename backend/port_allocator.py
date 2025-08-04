@@ -15,7 +15,7 @@ class PortAllocator:
     def __init__(self, 
                  allocation_file: str = "/app/mc_servers/port_allocations.json",
                  min_port: int = 25565,
-                 max_port: int = 25700,
+                 max_port: int = 25575,
                  special_min_port: int = 11000,
                  special_max_port: int = 11999):
         self.allocation_file = allocation_file

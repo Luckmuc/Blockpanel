@@ -1,4 +1,74 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Form, Body
+from fastapi.responses import JSONResponse
+import threading
+import time
+import yaml
+import os
+
+# Shared variable for available ports
+available_ports = []
+
+def parse_ports():
+    compose_files = [
+        "/project/docker-compose.yml",
+        "/project/docker-compose.dev.yml"
+    ]
+    # print(f"[DEBUG] Checking compose files: {compose_files}")
+    all_ports = set()
+    
+    for file in compose_files:
+        # print(f"[DEBUG] Checking file: {file}, exists: {os.path.exists(file)}")
+        if os.path.exists(file):
+            with open(file, "r", encoding="utf-8") as f:
+                try:
+                    data = yaml.safe_load(f)
+                    # print(f"[DEBUG] Loaded YAML from {file}: {data.keys() if data else 'None'}")
+                except Exception as e:
+                    # print(f"[DEBUG] Failed to parse YAML in {file}: {e}")
+                    continue
+                
+                proxy = data.get("services", {}).get("proxy", {})
+                ports = proxy.get("ports", [])
+                # print(f"[DEBUG] Found proxy ports in {file}: {ports}")
+                
+                # Always add 25565-25575
+                all_ports.update(range(25565, 25576))
+
+                for portmap in ports:
+                    # portmap can be like "25565-25575:25565-25575" or "29999:29999" or "19132:19132"
+                    if isinstance(portmap, int):
+                        all_ports.add(portmap)
+                        continue
+                    portstr = str(portmap).split(":")[0]
+                    # handle ranges
+                    if "-" in portstr:
+                        start, end = portstr.split("-")
+                        try:
+                            for p in range(int(start), int(end)+1):
+                                all_ports.add(p)
+                        except Exception:
+                            continue
+                    else:
+                        try:
+                            port_num = int(portstr)
+                            all_ports.add(port_num)
+                        except ValueError:
+                            continue
+    
+    result = sorted([int(p) for p in all_ports])
+    # print(f"[DEBUG] Final ports result: {result}")
+    return result
+
+def update_ports_loop():
+    global available_ports
+    while True:
+        available_ports = parse_ports() or []
+        time.sleep(1)
+
+def start_port_updater():
+    thread = threading.Thread(target=update_ports_loop, daemon=True)
+    thread.start()
+
 from auth import get_current_user
 
 app = FastAPI()
@@ -16,6 +86,7 @@ from slowapi.errors import RateLimitExceeded
 from datetime import timedelta
 from auth import authenticate_user, create_access_token, get_current_user, must_change_password, set_new_user, get_security_question, reset_password
 from routes import server_control
+from routes import port_extension
 from fastapi.middleware.cors import CORSMiddleware
 import re
 
@@ -63,6 +134,7 @@ app.add_middleware(
 )
 
 app.include_router(server_control.router, prefix="/api")
+app.include_router(port_extension.router, prefix="/api")
 
 @app.post("/api/login")
 @limiter.limit("5/minute")
@@ -106,6 +178,15 @@ def change_user(
         "token_type": "bearer",
         "message": "Username, password & security question changed!"
     }
+
+@app.on_event("startup")
+def fastapi_start_port_updater():
+    start_port_updater()
+
+# API endpoint for available ports
+@app.get("/api/available-ports")
+def get_available_ports():
+    return JSONResponse(content={"ports": available_ports})
 
 # Endpunkt: Sicherheitsfrage abfragen
 @app.post("/api/get_security_question")

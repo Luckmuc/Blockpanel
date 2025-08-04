@@ -1,1 +1,1 @@
-{"admin": {"username": "admin", "hashed_password": "$2b$12$fN7Lpd7/3DWxH/6ehz2RpeEoShgTeu/aBTcQmvbWYO5BK.lqmwF2.", "must_change": true, "security_question": "What is the default password?", "security_answer": "$2b$12$fN7Lpd7/3DWxH/6ehz2RpeEoShgTeu/aBTcQmvbWYO5BK.lqmwF2."}} 
+{"luckmuc": {"username": "luckmuc", "hashed_password": "$2b$12$fJuaeWXvk3DrGuQ/vrzTFubOelNl8p7oyQEpVGrpuooNGKDkZNaf6", "must_change": false, "security_question": "Test", "security_answer": "$2b$12$J5cTMlS3aoLjU7bLyiPEbO5Bl4CDQcvJ1vytlTCfa2i5XYNdmwDuO"}}

@@ -1182,7 +1182,12 @@ def get_properties(servername: str, current_user: dict = Depends(get_current_use
     return props
 
 @router.post("/server/properties/set")
-def set_property(servername: str, key: str, value: str, current_user: dict = Depends(get_current_user)):
+def set_property(
+    servername: str = Form(...),
+    key: str = Form(...),
+    value: str = Form(...),
+    current_user: dict = Depends(get_current_user)
+):
     prop_path = safe_server_path(servername, "server.properties")
     if not os.path.exists(prop_path):
         raise HTTPException(status_code=404, detail="server.properties not found")
@@ -1296,7 +1301,11 @@ def get_server_ram_config(servername: str, current_user: dict = Depends(get_curr
     return {"ram": ram}
 
 @router.post("/server/ram/set")
-def set_server_ram_config(servername: str, ram: str, current_user: dict = Depends(get_current_user)):
+def set_server_ram_config(
+    servername: str = Form(...),
+    ram: str = Form(...),
+    current_user: dict = Depends(get_current_user)
+):
     """Set the RAM configuration for a specific server"""
     try:
         ram_int = int(ram)

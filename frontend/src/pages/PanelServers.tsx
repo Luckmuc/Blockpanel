@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { Box, Typography, Paper, Button, CircularProgress, Avatar, IconButton, Tooltip, Slide } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
@@ -10,6 +9,7 @@ import ExtensionIcon from "@mui/icons-material/Extension";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { fetchServers, startServer, acceptEula, deleteServer, stopServer, createAndStartServer, validatePort, suggestFreePort } from "../api/servers";
+import { fetchAvailablePorts } from "../api/availablePorts";
 import { checkServerPort } from "../api/servers";
 import ServerStatusPanel from "./ServerStatusPanel";
 import Dialog from "@mui/material/Dialog";
@@ -22,6 +22,11 @@ import type { Server } from "../types/server";
 import { SERVER_VERSIONS } from "../data/serverVersions";
 import TextField from "@mui/material/TextField";
 import MenuItem from "@mui/material/MenuItem";
+import { useNotification } from "../components/NotificationProvider";
+
+// ...existing code...
+// Dynamic available ports from backend
+const POLL_PORTS_INTERVAL = 1000;
 const SIDEBAR_WIDTH = 72;
 const SIDEBAR_EXPANDED = 200;
 const SERVER_ICON_SIZE = 56;
@@ -41,6 +46,14 @@ const PanelServers: React.FC = () => {
   const { token: rawToken, clearToken } = useAuth();
   const token = rawToken ?? undefined;
   const navigate = useNavigate();
+  const { notify } = useNotification();
+
+  // Port Extension Dialog State
+  const [portExtensionDialog, setPortExtensionDialog] = useState(false);
+  const [additionalPorts, setAdditionalPorts] = useState<number[]>([]);
+  const [portValidationStates, setPortValidationStates] = useState<{[key: number]: 'checking' | 'available' | 'occupied'}>({});
+  const [restartConfirmDialog, setRestartConfirmDialog] = useState(false);
+  const [isRestarting, setIsRestarting] = useState(false);
 
   // Poll server status und Port-Check
   useEffect(() => {
@@ -75,6 +88,24 @@ const PanelServers: React.FC = () => {
     pollAll();
     return () => { active = false; };
   }, [token]);
+
+  // Poll available ports from backend
+  const [availablePorts, setAvailablePorts] = useState<number[]>([]);
+  useEffect(() => {
+    let active = true;
+    const pollPorts = async () => {
+      try {
+        const ports = await fetchAvailablePorts();
+        console.log('[DEBUG] availablePorts from backend:', ports);
+        if (active) setAvailablePorts(ports);
+      } catch (e) {
+        console.error('[DEBUG] Error fetching availablePorts:', e);
+      }
+      if (active) setTimeout(pollPorts, POLL_PORTS_INTERVAL);
+    };
+    pollPorts();
+    return () => { active = false; };
+  }, []);
 
   // Handler for stopping server
   const handleStopServer = async (server: string) => {
@@ -500,24 +531,142 @@ const PanelServers: React.FC = () => {
     setEulaInfo("Server creation cancelled. You must accept the EULA to create a Minecraft server.");
   };
 
+  // Port Extension Handlers
+  const handlePortExtensionToggle = (port: number) => {
+    setAdditionalPorts(prev => {
+      const isSelected = prev.includes(port);
+      const newPorts = isSelected 
+        ? prev.filter(p => p !== port)
+        : [...prev, port];
+      
+      // If adding a new port, start validation
+      if (!isSelected) {
+        validateAdditionalPort(port);
+      }
+      
+      return newPorts;
+    });
+  };
+
+  const validateAdditionalPort = async (port: number) => {
+    setPortValidationStates(prev => ({ ...prev, [port]: 'checking' }));
+    
+    try {
+      const result = await validatePort(port, token);
+      setPortValidationStates(prev => ({ 
+        ...prev, 
+        [port]: result.valid ? 'available' : 'occupied' 
+      }));
+    } catch (err) {
+      setPortValidationStates(prev => ({ ...prev, [port]: 'occupied' }));
+    }
+  };
+
+  const handlePortExtensionRequest = () => {
+    if (additionalPorts.length === 0) {
+      notify({ type: 'error', message: 'Please select at least one port to add.' });
+      return;
+    }
+    
+    const occupiedPorts = additionalPorts.filter(port => 
+      portValidationStates[port] === 'occupied'
+    );
+    
+    if (occupiedPorts.length > 0) {
+      notify({ 
+        type: 'error', 
+        message: `Some selected ports are occupied: ${occupiedPorts.join(', ')}` 
+      });
+      return;
+    }
+    
+    setPortExtensionDialog(false);
+    setRestartConfirmDialog(true);
+  };
+
+  const handleConfirmRestart = async () => {
+    setRestartConfirmDialog(false);
+    setIsRestarting(true);
+    
+    notify({ 
+      type: 'waiting', 
+      message: 'Extending port range and restarting Blockpanel...' 
+    });
+    
+    try {
+      // API call to extend ports and restart container
+      const response = await fetch('/api/extend-ports', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ additional_ports: additionalPorts })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to extend ports');
+      }
+      
+      // Wait for container restart (simulate detection)
+      setTimeout(() => {
+        setIsRestarting(false);
+        setAdditionalPorts([]);
+        setPortValidationStates({});
+        notify({ 
+          type: 'success', 
+          message: `Blockpanel restarted! Added ${additionalPorts.length} new ports.` 
+        });
+      }, 15000); // 15 seconds simulation
+      
+    } catch (error) {
+      setIsRestarting(false);
+      notify({ 
+        type: 'error', 
+        message: 'Failed to extend ports. Please try again.' 
+      });
+    }
+  };
+
+  const getPortStatusColor = (port: number) => {
+    const state = portValidationStates[port];
+    switch (state) {
+      case 'checking': return '#fff';
+      case 'available': return '#4caf50';
+      case 'occupied': return '#f44336';
+      default: return '#fff';
+    }
+  };
+
+  const getPortStatusIcon = (port: number) => {
+    const state = portValidationStates[port];
+    switch (state) {
+      case 'checking': return '⏳';
+      case 'available': return '✅';
+      case 'occupied': return '❌';
+      default: return '';
+    }
+  };
+
   return (
-    <Box
-      sx={{
-        minHeight: "100vh",
-        width: "100vw",
-        display: "flex",
-        background: "linear-gradient(135deg, #0f2027 0%, #2c5364 100%)",
-      }}
-    >
-      {showStatusPanel.open && showStatusPanel.server && (
-        <ServerStatusPanel 
-          serverName={showStatusPanel.server} 
-          onClose={handleCloseStatusPanel}
-          token={token}
-        />
-      )}
-      {/* Sidebar */}
+    <>
       <Box
+        sx={{
+          minHeight: "100vh",
+          width: "100vw",
+          display: "flex",
+          background: "linear-gradient(135deg, #0f2027 0%, #2c5364 100%)",
+        }}
+      >
+        {showStatusPanel.open && showStatusPanel.server && (
+          <ServerStatusPanel 
+            serverName={showStatusPanel.server} 
+            onClose={handleCloseStatusPanel}
+            token={token}
+          />
+        )}
+        {/* Sidebar */}
+        <Box
         sx={{
           height: "100vh",
           width: hovered ? SIDEBAR_EXPANDED : SIDEBAR_WIDTH,
@@ -649,7 +798,31 @@ const PanelServers: React.FC = () => {
             <Typography variant="h5" sx={{ color: "#fff", fontWeight: 700 }}>
               Your Servers
             </Typography>
-            <Box sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+            <Box sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+              <Button
+                variant="outlined"
+                startIcon={<HelpOutlineIcon />}
+                size="medium"
+                sx={{
+                  borderRadius: 2,
+                  fontWeight: 600,
+                  px: 2,
+                  py: 1,
+                  fontSize: 14,
+                  borderColor: 'rgba(255, 255, 255, 0.3)',
+                  color: '#b0c4de',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  '&:hover': {
+                    borderColor: '#90caf9',
+                    backgroundColor: 'rgba(144, 202, 249, 0.08)',
+                    color: '#90caf9'
+                  },
+                  transition: 'all 0.2s'
+                }}
+                onClick={() => setPortExtensionDialog(true)}
+              >
+                Need more ports?
+              </Button>
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
@@ -662,8 +835,7 @@ const PanelServers: React.FC = () => {
                   fontSize: 18,
                   boxShadow: '0 2px 8px 0 rgba(25, 118, 210, 0.15)',
                   minWidth: 180,
-                  letterSpacing: 1.1,
-                  ml: 4
+                  letterSpacing: 1.1
                 }}
                 onClick={() => setShowCreate(true)}
               >
@@ -693,12 +865,11 @@ const PanelServers: React.FC = () => {
                   sx={{ minWidth: 140 }}
                 />
                 <TextField
+                  select
                   label="Port"
                   value={newPort}
                   onChange={e => handlePortChange(e.target.value)}
                   size="small"
-                  type="number"
-                  inputProps={{ min: 1, max: 65535 }}
                   helperText={
                     portValidation.isValidating ? (
                       <Box display="flex" alignItems="center" gap={1}>
@@ -706,7 +877,7 @@ const PanelServers: React.FC = () => {
                         {portValidation.message}
                       </Box>
                     ) : portValidation.isValid ? (
-                      portValidation.message || "Default: 25565"
+                      portValidation.message || "Choose a port"
                     ) : (
                       <Box>
                         <Typography variant="caption" color="error">
@@ -729,7 +900,11 @@ const PanelServers: React.FC = () => {
                   }
                   error={!portValidation.isValid && !portValidation.isValidating}
                   sx={{ minWidth: 120 }}
-                />
+                >
+                  {availablePorts.map(port => (
+                    <MenuItem key={port} value={port.toString()}>{port}</MenuItem>
+                  ))}
+                </TextField>
                 <TextField
                   select
                   label="Version"
@@ -1133,8 +1308,201 @@ const PanelServers: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      
+      {/* Port Extension Dialog */}
+      <Dialog 
+        open={portExtensionDialog} 
+        onClose={() => setPortExtensionDialog(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ background: "rgba(30,40,60,0.95)", color: "#fff", textAlign: "center" }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+            <HelpOutlineIcon sx={{ color: "#90caf9" }} />
+            Extend Port Range
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ background: "rgba(30,40,60,0.95)", color: "#fff" }}>
+          {/* Current available ports info removed */}
+          <Typography sx={{ mb: 3, fontSize: 14, color: '#b0c4de' }}>
+            Select additional ports you want to add. Ports will be validated in real-time.
+          </Typography>
+          
+          {/* Port Selection Grid */}
+          <Box sx={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', 
+            gap: 2, 
+            mb: 3 
+          }}>
+            {[25576, 25577, 25578, 25579, 25580, 25581, 25582, 25583, 25584, 25585,
+              25586, 25587, 25588, 25589, 25590, 25591, 25592, 25593, 25594, 25595].map(port => (
+              <Box
+                key={port}
+                onClick={() => handlePortExtensionToggle(port)}
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  backgroundColor: additionalPorts.includes(port) 
+                    ? 'rgba(25, 118, 210, 0.2)' 
+                    : 'rgba(255, 255, 255, 0.05)',
+                  border: additionalPorts.includes(port) 
+                    ? '2px solid #1976d2' 
+                    : '1px solid rgba(255, 255, 255, 0.1)',
+                  '&:hover': {
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                  }
+                }}
+              >
+                <Typography sx={{ fontWeight: 600, color: getPortStatusColor(port) }}>
+                  {port}
+                </Typography>
+                <Typography sx={{ fontSize: 12 }}>
+                  {getPortStatusIcon(port)}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+          
+          {additionalPorts.length > 0 && (
+            <Box sx={{ mt: 3, p: 2, backgroundColor: 'rgba(25, 118, 210, 0.1)', borderRadius: 2 }}>
+              <Typography sx={{ mb: 1, fontWeight: 600 }}>
+                Selected Ports ({additionalPorts.length}):
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {additionalPorts.map(port => (
+                  <Typography
+                    key={port}
+                    sx={{
+                      px: 1.5,
+                      py: 0.5,
+                      backgroundColor: getPortStatusColor(port) === '#4caf50' 
+                        ? 'rgba(76, 175, 80, 0.2)' 
+                        : getPortStatusColor(port) === '#f44336'
+                        ? 'rgba(244, 67, 54, 0.2)'
+                        : 'rgba(255, 255, 255, 0.1)',
+                      borderRadius: 1,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: getPortStatusColor(port)
+                    }}
+                  >
+                    {port} {getPortStatusIcon(port)}
+                  </Typography>
+                ))}
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ background: "rgba(30,40,60,0.95)", p: 3 }}>
+          <Button onClick={() => setPortExtensionDialog(false)} sx={{ color: "#ccc" }}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handlePortExtensionRequest}
+            variant="contained"
+            disabled={additionalPorts.length === 0}
+            sx={{
+              backgroundColor: '#1976d2',
+              '&:hover': { backgroundColor: '#1565c0' },
+              '&:disabled': { backgroundColor: 'rgba(255, 255, 255, 0.12)' }
+            }}
+          >
+            Continue ({additionalPorts.length} ports)
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Restart Confirmation Dialog */}
+      <Dialog 
+        open={restartConfirmDialog} 
+        onClose={() => setRestartConfirmDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ background: "rgba(30,40,60,0.95)", color: "#fff", textAlign: "center" }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+            <SettingsIcon sx={{ color: "#f44336" }} />
+            Container Restart Required
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ background: "rgba(30,40,60,0.95)", color: "#fff", textAlign: 'center' }}>
+          <Typography sx={{ mb: 3, fontSize: 18, fontWeight: 600 }}>
+            This will restart the whole Blockpanel Container
+          </Typography>
+          <Typography sx={{ mb: 3, color: '#b0c4de' }}>
+            Adding {additionalPorts.length} new port{additionalPorts.length !== 1 ? 's' : ''}: {additionalPorts.join(', ')}
+          </Typography>
+          <Typography sx={{ color: '#ff9800', fontWeight: 600 }}>
+            Are you sure you want to continue?
+          </Typography>
+          <Typography sx={{ mt: 2, fontSize: 14, color: '#666' }}>
+            The restart will take approximately 10-15 seconds.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ background: "rgba(30,40,60,0.95)", p: 3, justifyContent: 'center' }}>
+          <Button 
+            onClick={() => setRestartConfirmDialog(false)} 
+            sx={{ color: "#ccc", mr: 2 }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleConfirmRestart}
+            variant="contained"
+            color="error"
+            startIcon={<SettingsIcon />}
+            sx={{ px: 4 }}
+          >
+            Yes, Restart Container
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Restarting Status Overlay */}
+      {isRestarting && (
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999
+          }}
+        >
+          <Paper
+            elevation={24}
+            sx={{
+              p: 6,
+              borderRadius: 4,
+              background: "rgba(30,40,60,0.95)",
+              textAlign: 'center',
+              minWidth: 400
+            }}
+          >
+            <CircularProgress size={60} sx={{ mb: 3, color: '#1976d2' }} />
+            <Typography variant="h6" sx={{ color: "#fff", mb: 2 }}>
+              Restarting Blockpanel...
+            </Typography>
+            <Typography sx={{ color: '#b0c4de' }}>
+              Adding {additionalPorts.length} new port{additionalPorts.length !== 1 ? 's' : ''}. Please wait...
+            </Typography>
+          </Paper>
+        </Box>
+      )}
+
     </Box>
+    </>
   );
-}
+};
 
 export default PanelServers;
