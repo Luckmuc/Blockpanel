@@ -6,7 +6,7 @@ services:
     ports:
     - 8000:8000
     expose:
-    - 25565-25595
+    - 25565-25575
     env_file:
     - .env
     restart: unless-stopped

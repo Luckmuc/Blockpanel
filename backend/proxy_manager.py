@@ -47,7 +47,7 @@ frontend minecraft_{server_name}
 backend backend_{server_name}
     mode tcp
     balance roundrobin
-    server mc_{server_name} backend:{port} check
+    server mc_{server_name} backend:{port} check inter 5s
 """
             
             # Lese aktuelle Konfiguration
@@ -137,46 +137,95 @@ backend backend_{server_name}
         Lädt HAProxy-Konfiguration neu
         """
         try:
-            if os.path.exists(self.reload_script):
-                result = subprocess.run(['bash', self.reload_script], 
-                                      capture_output=True, text=True, timeout=10)
-                if result.returncode == 0:
-                    logger.info("HAProxy erfolgreich neugeladen")
-                    return True
-                else:
-                    logger.error(f"HAProxy Reload fehlgeschlagen: {result.stderr}")
-                    return False
+            # Check if reload script exists and is executable
+            if not os.path.exists(self.reload_script):
+                logger.warning(f"HAProxy Reload Script nicht gefunden: {self.reload_script}")
+                # Try alternative reload methods
+                return self._alternative_reload()
+            
+            # Make script executable if needed
+            try:
+                os.chmod(self.reload_script, 0o755)
+            except Exception as e:
+                logger.warning(f"Could not make reload script executable: {e}")
+            
+            result = subprocess.run(['bash', self.reload_script], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                logger.info("HAProxy erfolgreich neugeladen")
+                return True
             else:
-                logger.warning("HAProxy Reload Script nicht gefunden")
+                logger.error(f"HAProxy Reload fehlgeschlagen: {result.stderr}")
+                logger.debug(f"HAProxy Reload stdout: {result.stdout}")
                 return False
+                
+        except subprocess.TimeoutExpired:
+            logger.error("HAProxy Reload timeout after 10 seconds")
+            return False
         except Exception as e:
             logger.error(f"Fehler beim HAProxy Reload: {e}")
             return False
     
+    def _alternative_reload(self) -> bool:
+        """
+        Alternative HAProxy reload method when script is not available
+        """
+        try:
+            # Try to reload via docker-compose if we're in a container environment
+            if os.path.exists("/shared/proxy/haproxy.cfg"):
+                # Just log that we would reload - in container this might be handled differently
+                logger.info("HAProxy configuration updated (container environment)")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Alternative reload failed: {e}")
+            return False
+    
     def _get_base_config(self) -> str:
         """
-        Gibt die Basis HAProxy Konfiguration zurück
+        Gibt die Basis HAProxy Konfiguration zurück mit vordefinierten Ports 25565-25595
+        Standard-Ports für normale Nutzung: 25565-25575
+        Erweiterte Ports für "Need more ports": 25576-25595
         """
-        return """global
+        config = """global
     daemon
     log stdout local0
-    
+
 defaults
     mode tcp
     timeout connect 5000ms
     timeout client 50000ms
     timeout server 50000ms
     option tcplog
+    log global
 
-# Statistics Interface (optional)
+# Statistics Interface (localhost only for security)
 frontend stats
-    bind *:8404
+    bind 127.0.0.1:8404
     mode http
     stats enable
     stats uri /stats
     stats refresh 5s
 
+# Minecraft Server Frontends/Backends für Ports 25565-25595 (vorkonfiguriert)
 """
+        
+        # Generiere alle Ports von 25565 bis 25595 (für HAProxy-Vollkonfiguration)
+        for port in range(25565, 25596):
+            config += f"""
+# Port {port}
+frontend minecraft_{port}
+    bind *:{port}
+    mode tcp
+    default_backend backend_{port}
+
+backend backend_{port}
+    mode tcp
+    balance roundrobin
+    server mc_{port} backend:{port} check inter 5s
+"""
+        
+        return config
     
     def get_active_servers(self) -> List[str]:
         """

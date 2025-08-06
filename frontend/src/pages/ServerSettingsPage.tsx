@@ -1,18 +1,24 @@
+
 import React, { useState } from "react";
+import WorldSettingsDialog from "../components/WorldSettingsDialog";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  Box, Typography, Paper, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, Tooltip, Slider, Chip, Stack
+  Box, Typography, Paper, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Slider, Chip, Stack, Tooltip, Slide
 } from "@mui/material";
-import TuneIcon from "@mui/icons-material/Tune";
 import StorageIcon from "@mui/icons-material/Storage";
+import SettingsIcon from "@mui/icons-material/Settings";
 import ExtensionIcon from "@mui/icons-material/Extension";
+import TuneIcon from "@mui/icons-material/Tune";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { deleteServer } from "../api/servers";
 import { setServerProperty } from "../api/serverProperties";
 import axios from "axios";
 import { API_BASE } from "../config/api";
 import { useAuth } from "../auth/AuthProvider";
-import { getServerStats } from "../api/servers";
+import { useNotification } from "../components/NotificationProvider";
+
+
+
 
 
 const SIDEBAR_WIDTH = 72;
@@ -26,39 +32,50 @@ const menuItems = [
 const ServerSettingsPage: React.FC = () => {
   const { servername } = useParams<{ servername: string }>();
   const { token, clearToken } = useAuth();
+  // const username = getUsernameFromToken(token) || "User";
+  const [hovered, setHovered] = useState<string | null>(null);
   const navigate = useNavigate();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // removed unused sidebarExpanded state
-
-  const [hovered, setHovered] = useState<string | undefined>(undefined);
   // State for settings
   const [maxPlayers, setMaxPlayers] = useState(20);
   const [ramMb, setRamMb] = useState(2048);
+  const [serverNameInput, setServerNameInput] = useState(servername ?? "");
   const ramPresets = [1024, 2048, 3072, 4096, 8192];
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [restartDialogOpen, setRestartDialogOpen] = useState(false);
-  const [serverRunning, setServerRunning] = useState<boolean>(false);
-  // removed unused pendingSettings state
+  // World Settings Dialog State
+  const [worldDialogOpen, setWorldDialogOpen] = useState(false);
+  const [worldSettings, setWorldSettings] = useState({
+    seed: "",
+    nether_end: true,
+    difficulty: "normal"
+  });
 
+  const { notify } = useNotification();
   // Simulate fetching current settings (replace with real API call)
   React.useEffect(() => {
     // TODO: fetch real settings from backend
     setMaxPlayers(20);
     setRamMb(2048);
-    // Fetch server status
-    const fetchStatus = async () => {
-      try {
-        const stats = await getServerStats(servername ?? "", token ?? undefined);
-        setServerRunning(stats.status === "running");
-      } catch {
-        setServerRunning(false);
-      }
-    };
-    if (servername) fetchStatus();
+    setServerNameInput(servername ?? "");
   }, [servername, token]);
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      clearToken();
+      navigate('/login');
+    }
+  };
 
 
   // Save settings to backend
@@ -73,7 +90,15 @@ const ServerSettingsPage: React.FC = () => {
         new URLSearchParams({ servername: servername ?? "", ram: String(ramMb) }),
         { headers: token ? { Authorization: `Bearer ${token ?? undefined}` } : {} }
       );
-      // Simulate: if RAM or maxPlayers changed, restart required
+      // Servername ändern, falls geändert und nicht leer und anders als vorher
+      if (serverNameInput && serverNameInput !== servername) {
+        await axios.post(
+          `${API_BASE}/server/rename`,
+          new URLSearchParams({ old_name: servername ?? "", new_name: serverNameInput }),
+          { headers: token ? { Authorization: `Bearer ${token ?? undefined}` } : {} }
+        );
+      }
+      // Simulate: if RAM, maxPlayers oder Name geändert, restart required
       return { restartRequired: true };
     } catch (e: any) {
       setSaveError(e?.response?.data?.detail || e?.message || 'Failed to save settings.');
@@ -81,37 +106,46 @@ const ServerSettingsPage: React.FC = () => {
     }
   };
 
+  // Save settings, open restart dialog if nötig
   const handleSave = async () => {
     setSaveLoading(true);
     setSaveError(null);
     const result = await saveSettings();
     setSaveLoading(false);
-    if (result.restartRequired && serverRunning) {
+    if (result.restartRequired) {
       setRestartDialogOpen(true);
+    } else {
+      notify({ type: 'error', message: saveError || 'Failed to save settings.' });
     }
   };
 
+  // Restart only, settings already saved
   const handleConfirmRestart = async () => {
     setRestartDialogOpen(false);
     setSaveLoading(true);
     setSaveError(null);
     try {
-      // Stop the server
-      await axios.post(
-        `${API_BASE}/server/stop?servername=${servername}`,
-        {},
-        { headers: token ? { Authorization: `Bearer ${token ?? undefined}` } : {} }
-      );
-      // Wait a bit for the server to stop
-      await new Promise(res => setTimeout(res, 2000));
-      // Start the server
-      await axios.post(
-        `${API_BASE}/server/start?servername=${servername}`,
-        {},
-        { headers: token ? { Authorization: `Bearer ${token ?? undefined}` } : {} }
-      );
+      // Hole aktuellen Serverstatus
+      const statusResp = await axios.get(`${API_BASE}/server/status?servername=${servername}`, {
+        headers: token ? { Authorization: `Bearer ${token ?? undefined}` } : {}
+      });
+      const isRunning = statusResp.data?.status === "running";
+      if (isRunning) {
+        // Nutze den dedizierten Restart-Endpoint
+        await axios.post(
+          `${API_BASE}/server/restart?servername=${servername}`,
+          {},
+          { headers: token ? { Authorization: `Bearer ${token ?? undefined}` } : {} }
+        );
+        notify({ type: 'success', message: 'Settings saved and server restarted.' });
+      } else {
+        notify({ type: 'success', message: 'Settings saved.' });
+      }
+      await new Promise(res => setTimeout(res, 700));
+      navigate('/servers');
     } catch (e: any) {
       setSaveError(e?.response?.data?.detail || e?.message || "Failed to restart server.");
+      notify({ type: 'error', message: e?.response?.data?.detail || e?.message || 'Failed to restart server.' });
     }
     setSaveLoading(false);
   };
@@ -135,19 +169,8 @@ const ServerSettingsPage: React.FC = () => {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/logout', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-    } catch (error) {
-      // ignore
-    } finally {
-      clearToken && clearToken();
-      navigate('/login');
-    }
-  };
+
+
 
 
   return (
@@ -159,7 +182,7 @@ const ServerSettingsPage: React.FC = () => {
         background: "linear-gradient(135deg, #0f2027 0%, #2c5364 100%)",
       }}
     >
-      {/* Sidebar (EXACT copy from PanelServers.tsx) */}
+      {/* Sidebar */}
       <Box
         sx={{
           height: "100vh",
@@ -175,61 +198,128 @@ const ServerSettingsPage: React.FC = () => {
           borderBottomRightRadius: 32,
           py: 3,
         }}
-        onMouseLeave={() => setHovered(undefined)}
+        onMouseLeave={() => setHovered(null)}
       >
         <Box sx={{ width: "100%", flex: 1 }}>
           {menuItems.map((item) => (
             <Tooltip key={item.key} title={item.label} placement="right">
               <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  px: 2,
+                  py: 1.5,
+                  cursor: "pointer",
+                  color: hovered === item.key ? "#1976d2" : "#fff",
+                  background: hovered === item.key ? "rgba(25, 118, 210, 0.08)" : undefined,
+                  borderRadius: 2,
+                  my: 1,
+                  transition: "background 0.2s, color 0.2s",
+                  '&:hover': { background: "rgba(255,255,255,0.08)" },
+                }}
                 onMouseEnter={() => setHovered(item.key)}
-                onMouseLeave={() => setHovered(undefined)}
                 onClick={() => {
                   if (item.key === "servers") navigate("/servers");
                   if (item.key === "plugins") navigate("/plugins");
                   if (item.key === "controls") navigate("/controls");
                 }}
-                sx={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 2,
-                  px: 2,
-                  py: 1.5,
-                  cursor: "pointer",
-                  borderRadius: 2,
-                  background:
-                    hovered === item.key
-                      ? "linear-gradient(90deg, #1976d2 0%, #1e293b 100%)"
-                      : "none",
-                  color: hovered === item.key ? "#fff" : "#b0c4de",
-                  fontWeight: hovered === item.key ? 700 : 500,
-                  fontSize: 18,
-                  transition: "all 0.18s",
-                }}
               >
                 {item.icon}
-                {hovered === item.key && (
-                  <Typography sx={{ ml: 2, fontWeight: 600, fontSize: 18 }}>{item.label}</Typography>
-                )}
+                <Slide direction="right" in={hovered === item.key} mountOnEnter unmountOnExit>
+                  <Typography sx={{ ml: 2, fontWeight: 600, color: "#b0c4de", whiteSpace: "nowrap" }}>
+                    {item.label}
+                  </Typography>
+                </Slide>
               </Box>
             </Tooltip>
           ))}
         </Box>
         <Box sx={{ width: "100%" }}>
+          <Tooltip title="Settings" placement="right">
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                px: 2,
+                py: 1.5,
+                cursor: "pointer",
+                color: hovered === "settings" ? "#1976d2" : "#fff",
+                background: hovered === "settings" ? "rgba(25, 118, 210, 0.08)" : undefined,
+                borderRadius: 2,
+                mb: 1,
+                transition: "background 0.2s, color 0.2s",
+                '&:hover': { background: "rgba(255,255,255,0.08)" },
+              }}
+              onMouseEnter={() => setHovered("settings")}
+            >
+              <SettingsIcon fontSize="large" />
+              <Slide direction="right" in={hovered === "settings"} mountOnEnter unmountOnExit>
+                <Typography sx={{ ml: 2, fontWeight: 600, color: "#b0c4de", whiteSpace: "nowrap" }}>
+                  Settings
+                </Typography>
+              </Slide>
+            </Box>
+          </Tooltip>
           <Tooltip title="Logout" placement="right">
-            <IconButton onClick={handleLogout} sx={{ color: "#b0c4de", mb: 1 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                px: 2,
+                py: 1.5,
+                cursor: "pointer",
+                color: hovered === "logout" ? "#f44336" : "#fff",
+                background: hovered === "logout" ? "rgba(244, 67, 54, 0.08)" : undefined,
+                borderRadius: 2,
+                transition: "background 0.2s, color 0.2s",
+                '&:hover': { background: "rgba(255,255,255,0.08)" },
+              }}
+              onMouseEnter={() => setHovered("logout")}
+              onClick={handleLogout}
+            >
               <LogoutIcon fontSize="large" />
-            </IconButton>
+              <Slide direction="right" in={hovered === "logout"} mountOnEnter unmountOnExit>
+                <Typography sx={{ ml: 2, fontWeight: 600, color: "#f44336", whiteSpace: "nowrap" }}>
+                  Logout
+                </Typography>
+              </Slide>
+            </Box>
           </Tooltip>
         </Box>
       </Box>
-
       {/* Main Content */}
-      <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-        <Paper sx={{ p: 5, borderRadius: 4, minWidth: 400, maxWidth: 600, background: '#1e293c' }}>
+      <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', position: 'relative', zIndex: 1 }}>
+        <Paper sx={{ p: 5, borderRadius: 4, minWidth: 600, maxWidth: 900, width: '80%', background: '#1e293c' }}>
           <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, color: '#fff' }}>Server Settings: {servername}</Typography>
           {/* Example settings, can be expanded */}
           <Box sx={{ mb: 3 }}>
+            {/* World Settings Edit Button */}
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+              <Button variant="outlined" color="primary" onClick={() => setWorldDialogOpen(true)}>
+                Edit World Settings
+              </Button>
+            </Box>
+            <WorldSettingsDialog
+              open={worldDialogOpen}
+              onClose={() => setWorldDialogOpen(false)}
+              seed={worldSettings.seed}
+              nether_end={worldSettings.nether_end}
+              difficulty={worldSettings.difficulty}
+              onSave={settings => {
+                setWorldSettings(settings);
+                setWorldDialogOpen(false);
+              }}
+            />
+            <Typography sx={{ mb: 1, fontWeight: 500, color: '#b0c4de' }}>Server Name</Typography>
+            <TextField
+              label="Server Name"
+              value={serverNameInput}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setServerNameInput(e.target.value)}
+              size="small"
+              sx={{ mb: 2, minWidth: 200 }}
+              inputProps={{ maxLength: 32 }}
+              helperText={serverNameInput !== servername ? 'Will be renamed on save.' : 'Current name.'}
+            />
             {/* Max Players Slider */}
             <Typography sx={{ mb: 1, fontWeight: 500, color: '#b0c4de' }}>Max Players</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -245,7 +335,6 @@ const ServerSettingsPage: React.FC = () => {
               />
               <Box sx={{ minWidth: 40, textAlign: 'center', color: '#fff', fontWeight: 600 }}>{maxPlayers}</Box>
             </Box>
-
             {/* RAM Selection */}
             <Typography sx={{ mb: 1, fontWeight: 500, color: '#b0c4de' }}>RAM</Typography>
             <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
