@@ -3,9 +3,25 @@ import os
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from typing import Optional
+import logging
+
+# Bcrypt Import mit Fehlerbehandlung
+try:
+    from passlib.context import CryptContext
+    # Explizite bcrypt-Konfiguration mit robusteren Einstellungen
+    pwd_context = CryptContext(
+        schemes=["bcrypt"], 
+        deprecated="auto",
+        bcrypt__rounds=12,  # Explizite Rounds-Angabe
+        bcrypt__ident="2b"  # Expliziter Identifier
+    )
+except Exception as e:
+    logging.warning(f"bcrypt configuration warning: {e}")
+    # Fallback-Konfiguration
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
@@ -13,7 +29,6 @@ if not SECRET_KEY:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 USERS_FILE = os.path.join(os.path.dirname(__file__), "users.json")
@@ -90,8 +105,11 @@ def set_new_user(username: str, password: str, security_question: str = None, se
         user_obj["security_question"] = security_question
         user_obj["security_answer"] = pwd_context.hash(security_answer)
     users[username] = user_obj
-    # Entferne ggf. alten admin-User
-    if "admin" in users and users["admin"].get("must_change", False):
+    # Setze must_change für alle User auf False (nur zur Sicherheit)
+    for u in users.values():
+        u["must_change"] = False
+    # Entferne immer den alten admin-User, falls vorhanden
+    if "admin" in users:
         del users["admin"]
     save_users(users)
     return True

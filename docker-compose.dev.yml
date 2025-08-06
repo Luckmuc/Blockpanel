@@ -6,12 +6,21 @@ services:
     volumes:
       - ./backend:/app
       - ./mc_servers:/app/mc_servers
+      - ./proxy:/shared/proxy:rw
+      - .:/project:ro
     ports:
       - "8000:8000"
-      - "25565:25565"
+    # Expose port range for internal container communication
+    expose:
+      - "25565-25575"
+      - "19132-19135"
     env_file:
       - .env
     restart: unless-stopped
+    networks:
+      - minecraft_network
+    command: ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+      
   frontend:
     build:
       context: ./frontend
@@ -20,7 +29,29 @@ services:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "1105:80"
+      - "1105:1105"
     environment:
       - NODE_ENV=production
     restart: unless-stopped
+    networks:
+      - minecraft_network
+
+  proxy:
+    build:
+      context: ./proxy
+      dockerfile: Dockerfile
+    ports:
+      # Standard Minecraft Java Ports
+      - "25565-25575:25565-25575"
+      # Minecraft Bedrock Ports
+    volumes:
+      - ./proxy:/usr/local/etc/haproxy:rw
+    networks:
+      - minecraft_network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+networks:
+  minecraft_network:
+    driver: bridge
