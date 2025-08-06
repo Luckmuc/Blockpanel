@@ -10,9 +10,10 @@ services:
       - .:/project:ro
     ports:
       - "8000:8000"
-    # Backend container exposes port range for Minecraft servers
+    # Expose port range for internal container communication
     expose:
       - "25565-25575"
+      - "19132-19135"
     env_file:
       - .env
     restart: unless-stopped
@@ -40,13 +41,9 @@ services:
       context: ./proxy
       dockerfile: Dockerfile
     ports:
-      # HAProxy Stats Interface (localhost only)
-      - "127.0.0.1:8404:8404"
       # Standard Minecraft Java Ports
       - "25565-25575:25565-25575"
-      # Minecraft Bedrock Ports (nur 2 Ports)
-      - "19132:19132"
-      - "19133:19133"
+      # Minecraft Bedrock Ports
     volumes:
       - ./proxy:/usr/local/etc/haproxy:rw
     networks:

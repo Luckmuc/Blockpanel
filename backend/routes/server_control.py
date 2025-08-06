@@ -1,5 +1,4 @@
-
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, BackgroundTasks, Form
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, BackgroundTasks, Form, Body
 from auth import get_current_user
 import subprocess
 import os
@@ -18,6 +17,68 @@ import threading
 import time
 
 router = APIRouter()
+
+def set_property_in_properties(servername: str, key: str, value: str):
+    prop_path = safe_server_path(servername, "server.properties")
+    lines = []
+    found = False
+    if os.path.exists(prop_path):
+        with open(prop_path, "r") as f:
+            for line in f:
+                if line.strip().startswith(f"{key}="):
+                    lines.append(f"{key}={value}\n")
+                    found = True
+                else:
+                    lines.append(line)
+    if not found:
+        lines.append(f"{key}={value}\n")
+    with open(prop_path, "w") as f:
+        f.writelines(lines)
+
+@router.get("/server/players_full")
+def get_players_full(servername: str, current_user: dict = Depends(get_current_user)):
+    """
+    Returns a list of players (name + uuid) for the given server.
+    Reads usercache.json from the server directory.
+    """
+    import json
+    usercache_path = safe_server_path(servername, "usercache.json")
+    players = []
+    if os.path.exists(usercache_path):
+        try:
+            with open(usercache_path, "r", encoding="utf-8", errors="ignore") as f:
+                data = json.load(f)
+            for entry in data:
+                name = entry.get("name")
+                uuid = entry.get("uuid")
+                if name and uuid:
+                    players.append({"name": name, "uuid": uuid})
+        except Exception:
+            pass
+    return {"players": players}
+
+@router.post("/server/properties/set-seed")
+def set_seed(servername: str = Form(...), seed: str = Form(...), current_user: dict = Depends(get_current_user)):
+    set_property_in_properties(servername, "level-seed", seed)
+    return {"message": f"Seed gesetzt: {seed}"}
+
+@router.post("/server/properties/set-nether")
+def set_nether(servername: str = Form(...), allow: bool = Form(...), current_user: dict = Depends(get_current_user)):
+    set_property_in_properties(servername, "allow-nether", "true" if allow else "false")
+    return {"message": f"Nether {'erlaubt' if allow else 'verboten'}"}
+
+@router.post("/server/properties/set-difficulty")
+def set_difficulty(servername: str = Form(...), difficulty: str = Form(...), current_user: dict = Depends(get_current_user)):
+    allowed = {"easy", "normal", "peaceful", "hard"}
+    if difficulty not in allowed:
+        raise HTTPException(status_code=400, detail="Ungültige Schwierigkeit. Erlaubt: easy, normal, peaceful, hard")
+    set_property_in_properties(servername, "difficulty", difficulty)
+    return {"message": f"Schwierigkeit gesetzt: {difficulty}"}
+
+@router.post("/server/properties/set-motd")
+def set_motd(servername: str = Form(...), motd: str = Form(...), current_user: dict = Depends(get_current_user)):
+    set_property_in_properties(servername, "motd", motd)
+    return {"message": f"MOTD gesetzt: {motd}"}
 
 def is_port_open(host: str, port: int, timeout: float = 0.5) -> bool:
     """Check if a port is open on the given host"""
@@ -626,14 +687,29 @@ def start_server_internal(servername: str, current_user: dict):
     # Prevent multiple servers from starting at once
     import time
     lock_file = safe_server_path(servername, "start.lock")
+    
+    # Cleanup stale locks (older than 5 minutes)
     if os.path.exists(lock_file):
-        logging.warning(f"Start lock exists for {servername}, aborting start.")
-        return {"status": "already starting"}
+        try:
+            lock_age = time.time() - os.path.getmtime(lock_file)
+            if lock_age > 300:  # 5 minutes
+                logging.warning(f"Removing stale lock file for {servername} (age: {lock_age:.1f}s)")
+                os.remove(lock_file)
+            else:
+                logging.warning(f"Start lock exists for {servername}, aborting start.")
+                return {"status": "already starting"}
+        except Exception as e:
+            logging.error(f"Error checking lock file age for {servername}: {e}")
+            return {"status": "already starting"}
+    
     if get_server_proc(servername):
         return {"status": "already running"}
+    
     try:
+        # Ensure the server directory exists and has proper permissions
+        os.makedirs(server_dir, exist_ok=True)
         with open(lock_file, "w") as f:
-            f.write("locked")
+            f.write(f"locked at {time.time()}")
     except Exception as e:
         logging.error(f"Could not create start lock for {servername}: {e}")
         return JSONResponse(status_code=500, content={"error": "Could not create start lock."})
@@ -737,13 +813,19 @@ def stop_server(servername: str, current_user: dict = Depends(get_current_user))
     pid = get_server_proc(servername)
     pid_file = get_pid_file(servername)
     if not pid:
+        logging.info(f"Stop: Server {servername} is not running.")
         return {"status": "not running"}
     try:
+        logging.info(f"Stop: Killing tmux session {session} for server {servername} (PID {pid})")
         subprocess.run(["tmux", "kill-session", "-t", session], check=True)
         if os.path.exists(pid_file):
             os.remove(pid_file)
+            logging.info(f"Stop: Removed PID file for {servername}")
+        else:
+            logging.info(f"Stop: No PID file found for {servername}")
         return {"status": "stopped"}
     except Exception as e:
+        logging.error(f"Stop: Error stopping server {servername}: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @router.get("/server/status")
@@ -762,12 +844,19 @@ def get_system_ram(current_user: dict = Depends(get_current_user)):
 
 @router.post("/server/restart")
 def restart_server(servername: str, current_user: dict = Depends(get_current_user)):
-    stop_response = stop_server(servername)
+    logging.info(f"Restart: Stopping server {servername}")
+    stop_response = stop_server(servername, current_user)
     if stop_response["status"] != "stopped":
+        logging.warning(f"Restart: Stop failed or not running for {servername}: {stop_response}")
         return stop_response
+    # Warte 2 Sekunden, damit Prozess wirklich beendet ist
+    time.sleep(2)
+    logging.info(f"Restart: Starting server {servername}")
     start_response = start_server_internal(servername, current_user)
-    if start_response["status"] != "started":
+    if start_response.get("status") != "started":
+        logging.warning(f"Restart: Start failed for {servername}: {start_response}")
         return start_response
+    logging.info(f"Restart: Server {servername} restarted successfully.")
     return {"status": "restarted"}
 
 @router.post("/server/create_and_start")
@@ -887,23 +976,13 @@ def create_and_start_server(
                 if allocated_port != port:
                     port = allocated_port
                     # Update server.properties with the actually allocated port
-                    props_path = safe_server_path(servername, "server.properties")
-                    try:
-                        with open(props_path, "r") as f:
-                            lines = f.readlines()
-                        with open(props_path, "w") as f:
-                            for line in lines:
-                                if line.startswith("server-port="):
-                                    f.write(f"server-port={port}\n")
-                                else:
-                                    f.write(line)
-                        logging.info(f"Updated server.properties with allocated port {port}")
-                    except Exception as e:
-                        logging.error(f"Failed to update server.properties with allocated port: {e}")
+                    set_server_port(servername, port)
+                    logging.info(f"Updated server.properties with allocated port {port}")
                 
                 logging.info(f"Added HAProxy configuration for {servername} on port {allocated_port}")
             else:
                 logging.warning(f"Failed to add HAProxy configuration for {servername}")
+                # Don't fail the entire operation, but log the issue
         except Exception as e:
             logging.warning(f"HAProxy configuration failed for {servername}: {e}")
             # Dies ist nicht kritisch für die Server-Erstellung
@@ -1316,3 +1395,89 @@ def set_server_ram_config(
     
     save_server_config(servername, ram)
     return {"message": f"RAM set to {ram}MB for server {servername}"}
+
+@router.post("/server/proxy/add")
+def add_server_to_proxy(
+    servername: str = Form(...),
+    port: int = Form(None),
+    current_user: dict = Depends(get_current_user)
+):
+    """Manually add a server to HAProxy configuration"""
+    try:
+        # Check if server exists
+        server_dir = safe_server_path(servername)
+        if not os.path.exists(server_dir):
+            raise HTTPException(status_code=404, detail="Server not found")
+        
+        # Get port from server.properties if not provided
+        if port is None:
+            props_path = safe_server_path(servername, "server.properties")
+            if os.path.exists(props_path):
+                with open(props_path, "r") as f:
+                    for line in f:
+                        if line.strip().startswith("server-port="):
+                            try:
+                                port = int(line.strip().split("=", 1)[1])
+                                break
+                            except:
+                                pass
+            if port is None:
+                port = 25565  # Default port
+        
+        # Add to HAProxy
+        success, allocated_port = proxy_manager.add_server_proxy(servername, port)
+        if success:
+            # Update server.properties if port changed
+            if allocated_port != port:
+                set_server_port(servername, allocated_port)
+                port = allocated_port
+            
+            return {
+                "message": f"Server {servername} added to proxy on port {port}",
+                "port": port,
+                "success": True
+            }
+        else:
+            return {
+                "message": f"Failed to add server {servername} to proxy",
+                "success": False
+            }
+    except Exception as e:
+        logging.error(f"Error adding server {servername} to proxy: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/server/proxy/remove")
+def remove_server_from_proxy(
+    servername: str = Form(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Manually remove a server from HAProxy configuration"""
+    try:
+        success = proxy_manager.remove_server_proxy(servername)
+        if success:
+            return {
+                "message": f"Server {servername} removed from proxy",
+                "success": True
+            }
+        else:
+            return {
+                "message": f"Failed to remove server {servername} from proxy",
+                "success": False
+            }
+    except Exception as e:
+        logging.error(f"Error removing server {servername} from proxy: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/server/proxy/status")
+def get_proxy_status(current_user: dict = Depends(get_current_user)):
+    """Get HAProxy configuration status"""
+    try:
+        active_servers = proxy_manager.get_active_servers()
+        return {
+            "active_servers": active_servers,
+            "proxy_config_path": proxy_manager.config_path,
+            "reload_script_path": proxy_manager.reload_script
+        }
+    except Exception as e:
+        logging.error(f"Error getting proxy status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
