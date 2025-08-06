@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Box, Button, TextField, Typography, Alert, Paper, CircularProgress } from '@mui/material';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE } from '../config/api';
 
 const ForgotPasswordPage: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -19,7 +20,14 @@ const ForgotPasswordPage: React.FC = () => {
     setError('');
     setLoading(true);
     try {
-      const res = await axios.post('/get_security_question', { username });
+      const res = await axios.post(`${API_BASE}/get_security_question`, 
+        JSON.stringify(username),
+        { 
+          headers: { 
+            'Content-Type': 'application/json' 
+          } 
+        }
+      );
       setSecurityQuestion(res.data.security_question);
       setStep(2);
     } catch (err: any) {
@@ -35,7 +43,7 @@ const ForgotPasswordPage: React.FC = () => {
     setLoading(true);
     try {
       await axios.post(
-        '/reset_password',
+        `${API_BASE}/reset_password`,
         new URLSearchParams({ username, security_answer: securityAnswer, new_password: newPassword }),
         { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
       );

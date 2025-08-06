@@ -9,8 +9,10 @@ import PanelServers from "./pages/PanelServers";
 import ServerStats from "./pages/ServerStats";
 import ServerSettingsPage from "./pages/ServerSettingsPage";
 import PluginsPage from "./pages/PluginsPage";
+import ServerControlsPage from "./pages/ServerControlsPage";
 import ChooseServerPage from "./pages/ChooseServerPage";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import WorldSettingsPage from "./pages/WorldSettingsPage";
 import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
 import { getTheme } from './theme';
@@ -27,7 +29,7 @@ const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
     
     // Validate token by calling /me endpoint
-    fetch('/me', {
+    fetch('/api/me', {
       headers: { Authorization: `Bearer ${token}` }
     })
     .then(res => {
@@ -63,6 +65,8 @@ function App() {
             <Route path="/plugins/choose-server" element={<RequireAuth><ChooseServerPage /></RequireAuth>} />
             <Route path="/servers/stats/:serverName" element={<RequireAuth><ServerStats /></RequireAuth>} />
             <Route path="/servers/:servername/settings" element={<RequireAuth><ServerSettingsPage /></RequireAuth>} />
+            <Route path="/servers/:servername/controls" element={<RequireAuth><ServerControlsPage /></RequireAuth>} />
+            <Route path="/servers/:servername/world-settings" element={<RequireAuth><WorldSettingsPage /></RequireAuth>} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             {/* Catch-all: Weiterleitung zu /login falls nicht gefunden */}
             <Route path="*" element={<Navigate to="/login" replace />} />

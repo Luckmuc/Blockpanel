@@ -9,6 +9,7 @@ RUN npm install --save-dev @types/jwt-decode
 RUN npm install @mui/material @mui/icons-material @emotion/react @emotion/styled react
 RUN npm install --save-dev @types/react
 RUN npm install --save-dev @types/react @types/react-dom
+RUN npm install axios
 COPY . .
 RUN npm run build
 

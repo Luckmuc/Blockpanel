@@ -31,7 +31,7 @@ const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   // Automatische Token-Validierung beim Start
   useEffect(() => {
     if (token) {
-      fetch('/me', {
+      fetch('/api/me', {
         headers: { Authorization: `Bearer ${token}` }
       })
       .then(res => {

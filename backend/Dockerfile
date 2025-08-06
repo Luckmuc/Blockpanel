@@ -10,6 +10,12 @@ RUN apt-get update && \
     apt-get install -y temurin-21-jdk && \
     rm -rf /var/lib/apt/lists/*
 
+# Stelle sicher, dass der Serverdaten-Ordner existiert und beschreibbar ist
+RUN mkdir -p /app/mc_servers && \
+    chmod 777 /app/mc_servers && \
+    mkdir -p /shared/proxy && \
+    chmod 755 /shared/proxy
+
 WORKDIR /app
 
 COPY requirements.txt ./
