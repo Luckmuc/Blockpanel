@@ -9,7 +9,7 @@ if [ -f "$CONFIG_FILE" ]; then
     # Test the configuration first
     haproxy -f "$CONFIG_FILE" -c
     if [ $? -eq 0 ]; then
-        # Configuration is valid, reload
+        # Configuration is valid, reload gracefully
         if [ -f "$PID_FILE" ]; then
             # Graceful reload with existing PID
             haproxy -f "$CONFIG_FILE" -sf $(cat "$PID_FILE")

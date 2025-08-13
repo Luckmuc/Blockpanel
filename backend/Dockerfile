@@ -1,6 +1,6 @@
 FROM python:3.13-slim
 
-# Installiere Java 21 (Temurin), curl, wget, gpg, procps, tmux
+# Installiere Java 21 (Temurin), curl, wget, gpg, procps, tmux und Node.js
 RUN apt-get update && \
     apt-get install -y curl wget gnupg procps tmux dos2unix && \
     mkdir -p /usr/share/man/man1 && \
@@ -8,6 +8,8 @@ RUN apt-get update && \
     echo "deb https://packages.adoptium.net/artifactory/deb bookworm main" > /etc/apt/sources.list.d/adoptium.list && \
     apt-get update && \
     apt-get install -y temurin-21-jdk && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/*
 
 # Stelle sicher, dass der Serverdaten-Ordner existiert und beschreibbar ist
@@ -20,6 +22,10 @@ WORKDIR /app
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Node.js dependencies
+COPY package.json ./
+RUN npm install
 
 COPY . .
 COPY entrypoint.sh ./

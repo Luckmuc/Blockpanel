@@ -47,7 +47,7 @@ frontend minecraft_{server_name}
 backend backend_{server_name}
     mode tcp
     balance roundrobin
-    server mc_{server_name} backend:{port} check inter 5s
+    server mc_{server_name} backend:{port} check inter 15s fall 5 rise 3
 """
             
             # Lese aktuelle Konfiguration
@@ -137,30 +137,33 @@ backend backend_{server_name}
         Lädt HAProxy-Konfiguration neu
         """
         try:
-            # Check if reload script exists and is executable
-            if not os.path.exists(self.reload_script):
-                logger.warning(f"HAProxy Reload Script nicht gefunden: {self.reload_script}")
-                # Try alternative reload methods
-                return self._alternative_reload()
+            # Try docker exec to reload HAProxy in the container
+            result = subprocess.run([
+                'docker', 'exec', 'blockpanel-proxy-1', 
+                '/usr/local/bin/reload-haproxy.sh'
+            ], capture_output=True, text=True, timeout=15)
             
-            # Make script executable if needed
-            try:
-                os.chmod(self.reload_script, 0o755)
-            except Exception as e:
-                logger.warning(f"Could not make reload script executable: {e}")
-            
-            result = subprocess.run(['bash', self.reload_script], 
-                                  capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
-                logger.info("HAProxy erfolgreich neugeladen")
+                logger.info("HAProxy erfolgreich über Docker exec neugeladen")
                 return True
             else:
-                logger.error(f"HAProxy Reload fehlgeschlagen: {result.stderr}")
-                logger.debug(f"HAProxy Reload stdout: {result.stdout}")
-                return False
+                logger.error(f"HAProxy Reload via Docker exec fehlgeschlagen: {result.stderr}")
                 
+                # Fallback: direct haproxy command
+                result2 = subprocess.run([
+                    'docker', 'exec', 'blockpanel-proxy-1', 
+                    'sh', '-c', 'haproxy -f /usr/local/etc/haproxy/haproxy.cfg -c && haproxy -f /usr/local/etc/haproxy/haproxy.cfg -sf $(cat /var/run/haproxy.pid 2>/dev/null || echo "")'
+                ], capture_output=True, text=True, timeout=15)
+                
+                if result2.returncode == 0:
+                    logger.info("HAProxy über direkten Befehl neugeladen")
+                    return True
+                else:
+                    logger.error(f"Direkter HAProxy Reload auch fehlgeschlagen: {result2.stderr}")
+                    return False
+                    
         except subprocess.TimeoutExpired:
-            logger.error("HAProxy Reload timeout after 10 seconds")
+            logger.error("HAProxy Reload timeout nach 15 Sekunden")
             return False
         except Exception as e:
             logger.error(f"Fehler beim HAProxy Reload: {e}")
@@ -171,12 +174,29 @@ backend backend_{server_name}
         Alternative HAProxy reload method when script is not available
         """
         try:
-            # Try to reload via docker-compose if we're in a container environment
-            if os.path.exists("/shared/proxy/haproxy.cfg"):
-                # Just log that we would reload - in container this might be handled differently
-                logger.info("HAProxy configuration updated (container environment)")
+            # Try to reload via docker exec to the proxy container
+            result = subprocess.run([
+                'docker', 'exec', 'blockpanel-proxy-1', 
+                '/usr/local/bin/reload-haproxy.sh'
+            ], capture_output=True, text=True, timeout=10)
+            
+            if result.returncode == 0:
+                logger.info("HAProxy configuration reloaded via docker exec")
                 return True
-            return False
+            else:
+                logger.error(f"Docker exec HAProxy reload failed: {result.stderr}")
+                # Try direct haproxy reload
+                result2 = subprocess.run([
+                    'docker', 'exec', 'blockpanel-proxy-1', 
+                    'haproxy', '-f', '/usr/local/etc/haproxy/haproxy.cfg', '-sf', '$(cat /var/run/haproxy.pid)'
+                ], capture_output=True, text=True, timeout=10, shell=True)
+                
+                if result2.returncode == 0:
+                    logger.info("HAProxy reloaded via direct command")
+                    return True
+                else:
+                    logger.error(f"Direct HAProxy reload also failed: {result2.stderr}")
+                    return False
         except Exception as e:
             logger.error(f"Alternative reload failed: {e}")
             return False
@@ -222,11 +242,57 @@ frontend minecraft_{port}
 backend backend_{port}
     mode tcp
     balance roundrobin
-    server mc_{port} backend:{port} check inter 5s
+    server mc_{port} backend:{port} check inter 30s fall 5 rise 3 disabled
 """
         
         return config
     
+    def enable_server_health_check(self, server_name: str) -> bool:
+        """
+        Enable health check for a specific server (when server starts)
+        """
+        try:
+            # Use HAProxy's runtime API to enable the server
+            import subprocess
+            result = subprocess.run([
+                "docker", "exec", "blockpanel-proxy-1", 
+                "echo", f"enable server backend_{server_name}/mc_{server_name}", 
+                "|", "socat", "stdio", "/var/lib/haproxy/stats"
+            ], capture_output=True, text=True, shell=True)
+            
+            if result.returncode == 0:
+                logger.info(f"Enabled health check for server {server_name}")
+                return True
+            else:
+                logger.warning(f"Failed to enable health check for {server_name}: {result.stderr}")
+                return False
+        except Exception as e:
+            logger.error(f"Error enabling health check for {server_name}: {e}")
+            return False
+    
+    def disable_server_health_check(self, server_name: str) -> bool:
+        """
+        Disable health check for a specific server (when server stops)
+        """
+        try:
+            # Use HAProxy's runtime API to disable the server
+            import subprocess
+            result = subprocess.run([
+                "docker", "exec", "blockpanel-proxy-1", 
+                "echo", f"disable server backend_{server_name}/mc_{server_name}", 
+                "|", "socat", "stdio", "/var/lib/haproxy/stats"
+            ], capture_output=True, text=True, shell=True)
+            
+            if result.returncode == 0:
+                logger.info(f"Disabled health check for server {server_name}")
+                return True
+            else:
+                logger.warning(f"Failed to disable health check for {server_name}: {result.stderr}")
+                return False
+        except Exception as e:
+            logger.error(f"Error disabling health check for {server_name}: {e}")
+            return False
+
     def get_active_servers(self) -> List[str]:
         """
         Gibt Liste der aktiven Server in der HAProxy Konfiguration zurück

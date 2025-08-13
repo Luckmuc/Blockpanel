@@ -19,6 +19,9 @@ services:
     restart: unless-stopped
     networks:
       - minecraft_network
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     command: ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
       
   frontend:

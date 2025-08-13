@@ -4,20 +4,19 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-    - 8000:8000
-    expose:
-    - 25565-25575
+      - "8000:8000"
+      - "25565-25575:25565-25575"
     env_file:
-    - .env
+      - .env
     restart: unless-stopped
     volumes:
-    - mc_servers:/app/mc_servers
-    - ./proxy:/shared/proxy
-    - .:/project:rw
-    - /var/run/docker.sock:/var/run/docker.sock:ro
-    - ./backend/users.json:/app/users.json
+      - mc_servers:/app/mc_servers
+      - ./proxy:/shared/proxy
+      - .:/project:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./backend/users.json:/app/users.json
     networks:
-    - minecraft_network
+      - minecraft_network
   frontend:
     build:
       context: ./frontend
@@ -34,9 +33,7 @@ services:
       context: ./proxy
       dockerfile: Dockerfile
     ports:
-    - 25565-25575:25565-25575
     - 8404:8404
-
     volumes:
     - ./proxy:/usr/local/etc/haproxy:rw
     networks:

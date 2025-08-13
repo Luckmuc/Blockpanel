@@ -1,10 +1,12 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Form, Body
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 import threading
 import time
 import yaml
 import os
 import logging
+import httpx
+from typing import Optional
 
 # Configure logging to reduce bcrypt warnings
 logging.basicConfig(
@@ -102,6 +104,32 @@ app.add_middleware(
 )
 
 app.include_router(server_control.router, prefix="/api")
+
+# Head service proxy routes
+@app.get("/api/head")
+async def proxy_head(username: str, size: Optional[int] = 64):
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(f"http://localhost:3001/api/head?username={username}&size={size}")
+            return Response(
+                content=response.content,
+                status_code=response.status_code,
+                headers={"Content-Type": response.headers.get("Content-Type", "image/png")}
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Head service error: {str(e)}")
+
+@app.get("/api/head/uuid")
+async def proxy_uuid(username: str):
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(f"http://localhost:3001/api/head/uuid?username={username}")
+            if response.status_code == 200:
+                return response.json()
+            else:
+                raise HTTPException(status_code=response.status_code, detail="Player not found")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"UUID service error: {str(e)}")
 
 @app.post("/api/login")
 @limiter.limit("5/minute")

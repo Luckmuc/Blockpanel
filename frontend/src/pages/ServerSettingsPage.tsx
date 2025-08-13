@@ -180,8 +180,20 @@ const ServerSettingsPage: React.FC = () => {
         width: "100vw",
         display: "flex",
         background: "linear-gradient(135deg, #0f2027 0%, #2c5364 100%)",
+        position: "relative"
       }}
     >
+      {/* Back Button oben links außerhalb der Sidebar, ohne Icon */}
+      <Box sx={{ position: "fixed", top: 32, left: SIDEBAR_WIDTH + 32, zIndex: 100 }}>
+        <Button
+          variant="outlined"
+          color="primary"
+          sx={{ fontWeight: 600, borderRadius: 2, px: 2, py: 1, background: "rgba(30,40,60,0.92)", color: "#b0c4de", boxShadow: "0 2px 8px 0 rgba(31, 38, 135, 0.17)", minWidth: 100 }}
+          onClick={() => navigate(-1)}
+        >
+          Back
+        </Button>
+      </Box>
       {/* Sidebar */}
       <Box
         sx={{
@@ -293,12 +305,6 @@ const ServerSettingsPage: React.FC = () => {
           <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, color: '#fff' }}>Server Settings: {servername}</Typography>
           {/* Example settings, can be expanded */}
           <Box sx={{ mb: 3 }}>
-            {/* World Settings Edit Button */}
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-              <Button variant="outlined" color="primary" onClick={() => setWorldDialogOpen(true)}>
-                Edit World Settings
-              </Button>
-            </Box>
             <WorldSettingsDialog
               open={worldDialogOpen}
               onClose={() => setWorldDialogOpen(false)}

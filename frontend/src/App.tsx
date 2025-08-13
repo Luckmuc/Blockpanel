@@ -1,5 +1,6 @@
 import React from "react";
 import PanelPage from "./pages/PanelPage";
+import ControlsPage from "./pages/ControlsPage";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import ChangeCredentialsPage from "./pages/ChangeCredentialsPage";
@@ -67,6 +68,7 @@ function App() {
             <Route path="/servers/:servername/settings" element={<RequireAuth><ServerSettingsPage /></RequireAuth>} />
             <Route path="/servers/:servername/controls" element={<RequireAuth><ServerControlsPage /></RequireAuth>} />
             <Route path="/servers/:servername/world-settings" element={<RequireAuth><WorldSettingsPage /></RequireAuth>} />
+            <Route path="/controls" element={<RequireAuth><ControlsPage /></RequireAuth>} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             {/* Catch-all: Weiterleitung zu /login falls nicht gefunden */}
             <Route path="*" element={<Navigate to="/login" replace />} />

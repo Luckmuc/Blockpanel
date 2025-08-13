@@ -14,6 +14,14 @@ export default defineConfig({
       '/change_username': 'http://localhost:8000',
       '/me': 'http://localhost:8000',
       // ggf. weitere Endpunkte
+      '/api/head': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/api/head/uuid': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
     }
   }
 })

@@ -62,10 +62,13 @@ def set_seed(servername: str = Form(...), seed: str = Form(...), current_user: d
     set_property_in_properties(servername, "level-seed", seed)
     return {"message": f"Seed gesetzt: {seed}"}
 
-@router.post("/server/properties/set-nether")
-def set_nether(servername: str = Form(...), allow: bool = Form(...), current_user: dict = Depends(get_current_user)):
+
+@router.post("/server/properties/other_dimensions")
+def set_other_dimensions(servername: str = Form(...), allow: bool = Form(...), current_user: dict = Depends(get_current_user)):
+    # Setze sowohl Nether als auch End
     set_property_in_properties(servername, "allow-nether", "true" if allow else "false")
-    return {"message": f"Nether {'erlaubt' if allow else 'verboten'}"}
+    set_property_in_properties(servername, "allow-end", "true" if allow else "false")
+    return {"message": f"Nether & End {'erlaubt' if allow else 'verboten'}"}
 
 @router.post("/server/properties/set-difficulty")
 def set_difficulty(servername: str = Form(...), difficulty: str = Form(...), current_user: dict = Depends(get_current_user)):
@@ -80,6 +83,10 @@ def set_motd(servername: str = Form(...), motd: str = Form(...), current_user: d
     set_property_in_properties(servername, "motd", motd)
     return {"message": f"MOTD gesetzt: {motd}"}
 
+@router.post("/server/properties/set")
+def set_property(servername: str = Form(...), key: str = Form(...), value: str = Form(...), current_user: dict = Depends(get_current_user)):
+    set_property_in_properties(servername, key, value)
+    return {"message": f"Property '{key}' gesetzt: {value}"}
 def is_port_open(host: str, port: int, timeout: float = 0.5) -> bool:
     """Check if a port is open on the given host"""
     try:
@@ -920,19 +927,60 @@ def create_and_start_server(
     # 5. Download purpur.jar
     jar_path = os.path.join(base_path, "purpur.jar")
     try:
-        curl_cmd = ["curl", "-L", "-o", jar_path, purpur_url]
-        result = subprocess.run(curl_cmd, capture_output=True, text=True)
-        if result.returncode != 0 or not os.path.exists(jar_path):
-            logging.error(f"curl Fehler: {result.stderr}")
-            raise HTTPException(status_code=500, detail="Download failed.")
+        # Versuche zuerst mit curl
+        curl_cmd = [
+            "curl", 
+            "-L",           # Follow redirects
+            "-f",           # Fail silently on HTTP errors
+            "--retry", "3", # Retry 3 times
+            "--retry-delay", "2",  # Wait 2 seconds between retries
+            "--connect-timeout", "30",  # Connection timeout
+            "--max-time", "300",    # Max total time (5 minutes)
+            "-o", jar_path, 
+            purpur_url
+        ]
+        logging.info(f"Downloading JAR from {purpur_url} using curl")
+        result = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=360)
+        
+        if result.returncode != 0:
+            logging.warning(f"curl failed with return code {result.returncode}, trying Python requests")
+            logging.warning(f"curl stderr: {result.stderr}")
+            
+            # Fallback zu Python requests
+            import requests
+            logging.info(f"Downloading JAR from {purpur_url} using requests")
+            response = requests.get(purpur_url, stream=True, timeout=300)
+            response.raise_for_status()
+            
+            with open(jar_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            logging.info("Successfully downloaded JAR using requests")
+            
+        if not os.path.exists(jar_path):
+            logging.error(f"JAR file was not created at {jar_path}")
+            raise HTTPException(status_code=500, detail="JAR file was not downloaded")
+            
+        # Prüfe ob die Datei eine vernünftige Größe hat (mindestens 1MB)
+        file_size = os.path.getsize(jar_path)
+        if file_size < 1024 * 1024:  # 1MB
+            logging.error(f"Downloaded file is too small: {file_size} bytes")
+            os.remove(jar_path)
+            raise HTTPException(status_code=500, detail="Downloaded file is too small")
+            
+        logging.info(f"Successfully downloaded JAR file: {file_size} bytes")
+        
         if os.name != "nt":
             try:
                 os.chmod(jar_path, 0o755)
             except Exception as chmod_err:
                 logging.warning(f"chmod für purpur.jar fehlgeschlagen: {chmod_err}")
+    except subprocess.TimeoutExpired:
+        logging.error("Download timeout after 6 minutes")
+        raise HTTPException(status_code=500, detail="Download timeout")
     except Exception as e:
         logging.error(f"Download/Write error: {e}")
-        raise HTTPException(status_code=500, detail="Download failed.")
+        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
 
     # 6. RAM-Konfiguration speichern
     try:
@@ -941,7 +989,34 @@ def create_and_start_server(
         logging.error(f"Failed to save RAM config: {e}")
         raise HTTPException(status_code=500, detail="Failed to save RAM config.")
 
-    # 7. Initial-Run für EULA-Generierung
+    # 7. Set port in server.properties first (before initial run)
+    try:
+        set_server_port(servername, port)
+        logging.info(f"Set port {port} for server {servername}")
+    except Exception as e:
+        logging.error(f"Failed to set port for {servername}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to set server port")
+    
+    # 8. HAProxy Konfiguration aktualisieren (before server start)
+    try:
+        proxy_success, allocated_port = proxy_manager.add_server_proxy(servername, port)
+        if proxy_success:
+            # Update port if it was changed by the allocator
+            if allocated_port != port:
+                port = allocated_port
+                # Update server.properties with the actually allocated port
+                set_server_port(servername, port)
+                logging.info(f"Updated server.properties with allocated port {port}")
+            
+            logging.info(f"Added HAProxy configuration for {servername} on port {allocated_port}")
+        else:
+            logging.warning(f"Failed to add HAProxy configuration for {servername}")
+            # Don't fail the entire operation, but log the issue
+    except Exception as e:
+        logging.warning(f"HAProxy configuration failed for {servername}: {e}")
+        # Dies ist nicht kritisch für die Server-Erstellung
+
+    # 9. Initial-Run für EULA-Generierung (optimized)
     eula_path = safe_server_path(servername, "eula.txt")
     try:
         logging.info(f"Starting initial run for server {servername} with {ram}MB RAM on port {port}")
@@ -949,43 +1024,24 @@ def create_and_start_server(
             "java", f"-Xmx{ram}M", "-jar", "purpur.jar", "nogui"
         ], cwd=base_path, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         import time
-        time.sleep(10)
+        # Reduced wait time from 10 to 5 seconds
+        time.sleep(5)
         try:
             process.stdin.write("stop\n")
             process.stdin.flush()
-            process.wait(timeout=10)
+            # Reduced timeout from 10 to 5 seconds
+            process.wait(timeout=5)
             logging.info(f"Initial run completed gracefully for {servername}")
-        except Exception:
+        except subprocess.TimeoutExpired:
+            logging.warning(f"Initial run timeout for {servername}, force killing")
             process.kill()
             process.wait()
             logging.info(f"Initial run force-killed for {servername}")
-        
-        # 8. Port in server.properties setzen
-        try:
-            set_server_port(servername, port)
-            logging.info(f"Set port {port} for server {servername}")
         except Exception as e:
-            logging.error(f"Failed to set port for {servername}: {e}")
-            raise HTTPException(status_code=500, detail="Failed to set server port")
-        
-        # 9. HAProxy Konfiguration aktualisieren
-        try:
-            proxy_success, allocated_port = proxy_manager.add_server_proxy(servername, port)
-            if proxy_success:
-                # Update port if it was changed by the allocator
-                if allocated_port != port:
-                    port = allocated_port
-                    # Update server.properties with the actually allocated port
-                    set_server_port(servername, port)
-                    logging.info(f"Updated server.properties with allocated port {port}")
-                
-                logging.info(f"Added HAProxy configuration for {servername} on port {allocated_port}")
-            else:
-                logging.warning(f"Failed to add HAProxy configuration for {servername}")
-                # Don't fail the entire operation, but log the issue
-        except Exception as e:
-            logging.warning(f"HAProxy configuration failed for {servername}: {e}")
-            # Dies ist nicht kritisch für die Server-Erstellung
+            logging.warning(f"Error during initial run stop for {servername}: {e}")
+            process.kill()
+            process.wait()
+            logging.info(f"Initial run force-killed for {servername}")
         
         # 10. EULA automatisch akzeptieren wenn gewünscht
         if accept_eula:
@@ -1024,27 +1080,58 @@ def create_and_start_server(
                 "eula_required": True
             })
         else:
-            raise HTTPException(status_code=500, detail="Failed to initialize server")
+            # Continue with server start even if initial run had issues
+            logging.warning(f"Initial run failed but continuing with server creation for {servername}")
 
-    # 10. Server starten wenn EULA akzeptiert wurde
+    # 11. Server starten wenn EULA akzeptiert wurde (with improved error handling)
     if accept_eula:
         try:
+            # Check if EULA is properly set before starting
+            if os.path.exists(eula_path):
+                with open(eula_path, "r") as f:
+                    eula_content = f.read()
+                if "eula=true" not in eula_content:
+                    # Force set EULA to true
+                    with open(eula_path, "w") as f:
+                        f.write("#By changing the setting below to TRUE you are indicating your agreement to our EULA (https://account.mojang.com/documents/minecraft_eula).\n")
+                        f.write("#Mon Jan 01 00:00:00 UTC 2024\n")
+                        f.write("eula=true\n")
+                    logging.info(f"Fixed EULA for {servername}")
+            
             start_result = start_server_internal(servername, current_user)
             if isinstance(start_result, JSONResponse):
                 return JSONResponse(content={
-                    "message": "Server created but failed to start. Please try starting manually.",
+                    "message": "Server created successfully! Starting server...",
                     "server_name": servername,
                     "port": port,
+                    "status": "starting",
                     "eula_accepted": True
                 })
-            elif isinstance(start_result, dict) and start_result.get("status") == "already running":
-                return JSONResponse(content={
-                    "message": "Server created and is running!",
-                    "server_name": servername,
-                    "port": port,
-                    "status": "running",
-                    "eula_accepted": True
-                })
+            elif isinstance(start_result, dict):
+                if start_result.get("status") == "already running":
+                    return JSONResponse(content={
+                        "message": "Server created and is running!",
+                        "server_name": servername,
+                        "port": port,
+                        "status": "running",
+                        "eula_accepted": True
+                    })
+                elif start_result.get("status") in ["started", "booting"]:
+                    return JSONResponse(content={
+                        "message": "Server created and started successfully!",
+                        "server_name": servername,
+                        "port": port,
+                        "status": start_result.get("status", "starting"),
+                        "eula_accepted": True
+                    })
+                else:
+                    return JSONResponse(content={
+                        "message": "Server created successfully! Please start it manually.",
+                        "server_name": servername,
+                        "port": port,
+                        "status": "created",
+                        "eula_accepted": True
+                    })
             else:
                 return JSONResponse(content={
                     "message": "Server created and started successfully!",
@@ -1056,9 +1143,10 @@ def create_and_start_server(
         except Exception as e:
             logging.error(f"Start error: {e}")
             return JSONResponse(content={
-                "message": "Server created with EULA accepted, but failed to start automatically.",
+                "message": "Server created successfully! Please start it manually from the control panel.",
                 "server_name": servername,
                 "port": port,
+                "status": "created",
                 "eula_accepted": True
             })
     else:
@@ -1346,6 +1434,259 @@ def kill_server(servername: str, current_user: dict = Depends(get_current_user))
         return {"status": "killed"}
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+@router.get("/server/ops")
+def get_server_ops(servername: str, current_user: dict = Depends(get_current_user)):
+    """Get current server operators (admins) from ops.json"""
+    import json
+    try:
+        ops_path = safe_server_path(servername, "ops.json")
+        if os.path.exists(ops_path):
+            with open(ops_path, "r", encoding="utf-8") as f:
+                ops_data = json.load(f)
+                return {"ops": ops_data}
+        return {"ops": []}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@router.get("/server/banned-players")
+def get_server_banned_players(servername: str, current_user: dict = Depends(get_current_user)):
+    """Get current banned players from banned-players.json"""
+    import json
+    try:
+        banned_path = safe_server_path(servername, "banned-players.json")
+        if os.path.exists(banned_path):
+            with open(banned_path, "r", encoding="utf-8") as f:
+                banned_data = json.load(f)
+                return {"banned": banned_data}
+        return {"banned": []}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@router.get("/server/whitelist")
+def get_server_whitelist(servername: str, current_user: dict = Depends(get_current_user)):
+    """Get current whitelist from whitelist.json"""
+    import json
+    try:
+        whitelist_path = safe_server_path(servername, "whitelist.json")
+        if os.path.exists(whitelist_path):
+            with open(whitelist_path, "r", encoding="utf-8") as f:
+                whitelist_data = json.load(f)
+                return {"whitelist": whitelist_data}
+        return {"whitelist": []}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@router.post("/server/ops/set")
+def set_server_ops(
+    servername: str = Form(...),
+    ops_data: str = Form(...),  # JSON string of admin UUIDs
+    current_user: dict = Depends(get_current_user)
+):
+    """Set server operators (admins) in ops.json"""
+    import json
+    try:
+        # Parse the ops data
+        ops_list = json.loads(ops_data)
+        
+        # Create ops.json format
+        ops_entries = []
+        for op in ops_list:
+            ops_entries.append({
+                "uuid": op["uuid"],
+                "name": op["name"],
+                "level": 4,  # Full operator privileges
+                "bypassesPlayerLimit": False
+            })
+        
+        # Write to ops.json
+        ops_path = safe_server_path(servername, "ops.json")
+        with open(ops_path, "w") as f:
+            json.dump(ops_entries, f, indent=2)
+        
+        logging.info(f"Updated ops.json for {servername} with {len(ops_entries)} operators")
+        
+        # If server is running, reload ops
+        if get_server_proc(servername):
+            try:
+                session = get_tmux_session(servername)
+                subprocess.run([
+                    "tmux", "send-keys", "-t", session, 
+                    "/op reload", "Enter"
+                ], check=True)
+                logging.info(f"Reloaded ops for running server {servername}")
+            except Exception as e:
+                logging.warning(f"Failed to reload ops for {servername}: {e}")
+        
+        return {"message": f"Successfully updated {len(ops_entries)} operators"}
+    
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON in ops_data")
+    except Exception as e:
+        logging.error(f"Error setting ops for {servername}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/server/banned-players/set")
+def set_banned_players(
+    servername: str = Form(...),
+    banned_data: str = Form(...),  # JSON string of banned player UUIDs
+    current_user: dict = Depends(get_current_user)
+):
+    """Set banned players in banned-players.json"""
+    import json
+    from datetime import datetime
+    try:
+        # Parse the banned data
+        banned_list = json.loads(banned_data)
+        
+        # Create banned-players.json format
+        banned_entries = []
+        for banned in banned_list:
+            banned_entries.append({
+                "uuid": banned["uuid"],
+                "name": banned["name"],
+                "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S +0000"),
+                "source": "Server",
+                "expires": "forever",
+                "reason": "Banned by admin"
+            })
+        
+        # Write to banned-players.json
+        banned_path = safe_server_path(servername, "banned-players.json")
+        with open(banned_path, "w") as f:
+            json.dump(banned_entries, f, indent=2)
+        
+        logging.info(f"Updated banned-players.json for {servername} with {len(banned_entries)} banned players")
+        
+        # If server is running, reload bans
+        if get_server_proc(servername):
+            try:
+                session = get_tmux_session(servername)
+                subprocess.run([
+                    "tmux", "send-keys", "-t", session, 
+                    "/banlist reload", "Enter"
+                ], check=True)
+                logging.info(f"Reloaded banned players for running server {servername}")
+            except Exception as e:
+                logging.warning(f"Failed to reload banned players for {servername}: {e}")
+        
+        return {"message": f"Successfully updated {len(banned_entries)} banned players"}
+    
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON in banned_data")
+    except Exception as e:
+        logging.error(f"Error setting banned players for {servername}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/server/whitelist/set")
+def set_whitelist(
+    servername: str = Form(...),
+    whitelist_data: str = Form(...),  # JSON string of whitelisted player UUIDs
+    current_user: dict = Depends(get_current_user)
+):
+    """Set whitelisted players in whitelist.json"""
+    import json
+    try:
+        # Parse the whitelist data
+        whitelist_list = json.loads(whitelist_data)
+        
+        # Create whitelist.json format
+        whitelist_entries = []
+        for player in whitelist_list:
+            whitelist_entries.append({
+                "uuid": player["uuid"],
+                "name": player["name"]
+            })
+        
+        # Write to whitelist.json
+        whitelist_path = safe_server_path(servername, "whitelist.json")
+        with open(whitelist_path, "w") as f:
+            json.dump(whitelist_entries, f, indent=2)
+        
+        logging.info(f"Updated whitelist.json for {servername} with {len(whitelist_entries)} whitelisted players")
+        
+        # If server is running, reload whitelist
+        if get_server_proc(servername):
+            try:
+                session = get_tmux_session(servername)
+                subprocess.run([
+                    "tmux", "send-keys", "-t", session, 
+                    "/whitelist reload", "Enter"
+                ], check=True)
+                logging.info(f"Reloaded whitelist for running server {servername}")
+            except Exception as e:
+                logging.warning(f"Failed to reload whitelist for {servername}: {e}")
+        
+        return {"message": f"Successfully updated {len(whitelist_entries)} whitelisted players"}
+    
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON in whitelist_data")
+    except Exception as e:
+        logging.error(f"Error setting whitelist for {servername}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/server/properties/gamemode")
+def set_gamemode(
+    servername: str = Form(...),
+    gamemode: str = Form(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Set default gamemode in server.properties"""
+    try:
+        if gamemode not in ["survival", "creative", "adventure", "spectator"]:
+            raise HTTPException(status_code=400, detail="Invalid gamemode")
+        
+        set_property_in_properties(servername, "gamemode", gamemode)
+        logging.info(f"Set gamemode to {gamemode} for {servername}")
+        
+        return {"message": f"Gamemode set to {gamemode}"}
+    except Exception as e:
+        logging.error(f"Error setting gamemode for {servername}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/server/properties/allow-cheats")
+def set_allow_cheats(
+    servername: str = Form(...),
+    allow_cheats: bool = Form(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Set allow cheats in server.properties"""
+    try:
+        set_property_in_properties(servername, "allow-cheats", "true" if allow_cheats else "false")
+        logging.info(f"Set allow-cheats to {allow_cheats} for {servername}")
+        
+        return {"message": f"Allow cheats set to {allow_cheats}"}
+    except Exception as e:
+        logging.error(f"Error setting allow-cheats for {servername}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/server/kick-player")
+def kick_player(
+    servername: str = Form(...),
+    player_name: str = Form(...),
+    reason: str = Form(default="Kicked by admin"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Kick a player from the server (immediate action)"""
+    try:
+        # Check if server is running
+        if not get_server_proc(servername):
+            raise HTTPException(status_code=400, detail="Server is not running")
+        
+        session = get_tmux_session(servername)
+        kick_command = f"/kick {player_name} {reason}"
+        
+        subprocess.run([
+            "tmux", "send-keys", "-t", session, 
+            kick_command, "Enter"
+        ], check=True)
+        
+        logging.info(f"Kicked player {player_name} from {servername}: {reason}")
+        return {"message": f"Player {player_name} has been kicked"}
+    
+    except Exception as e:
+        logging.error(f"Error kicking player {player_name} from {servername}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/server/plugins/upload")
 def upload_plugin(servername: str, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):

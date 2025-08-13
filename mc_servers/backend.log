@@ -1,0 +1,19 @@
+2025-08-10 15:49:23,701 INFO Allocated preferred port 25571 to test
+2025-08-10 15:49:23,702 INFO Allocated requested port 25571 for server test
+2025-08-10 15:49:23,707 INFO Downloading JAR from https://api.purpurmc.org/v2/purpur/1.21.5/2450/download using curl
+2025-08-10 15:49:59,500 INFO Successfully downloaded JAR file: 54289044 bytes
+2025-08-10 15:49:59,529 INFO Set port 25571 for server test
+2025-08-10 15:49:59,537 INFO Server test already has port 25571
+2025-08-10 15:49:59,592 ERROR HAProxy Reload fehlgeschlagen: 
+2025-08-10 15:49:59,607 INFO Deallocated port 25571 from test
+2025-08-10 15:49:59,609 WARNING Failed to add HAProxy configuration for test
+2025-08-10 15:49:59,610 INFO Starting initial run for server test with 2048MB RAM on port 25571
+2025-08-10 15:50:09,615 WARNING Initial run timeout for test, force killing
+2025-08-10 15:50:09,639 INFO Initial run force-killed for test
+2025-08-10 15:50:09,647 INFO Created and accepted EULA file for test
+2025-08-10 15:50:09,732 INFO Server test gestartet (PID 40)
+2025-08-10 15:51:35,492 INFO Stop: Killing tmux session mc_test for server test (PID 40)
+2025-08-10 15:51:35,508 INFO Stop: Removed PID file for test
+2025-08-10 15:51:37,887 INFO Server test gestartet (PID 101)
+2025-08-10 15:53:39,114 INFO Stop: Killing tmux session mc_test for server test (PID 101)
+2025-08-10 15:53:39,133 INFO Stop: Removed PID file for test

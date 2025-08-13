@@ -1,4 +1,14 @@
 import React, { useState } from "react";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import { isServerRunning } from "../api/isServerRunning";
+import { restartServer } from "../api/restartServer";
+import Tooltip from "@mui/material/Tooltip";
+import Slide from "@mui/material/Slide";
+import SettingsIcon from "@mui/icons-material/Settings";
+import LogoutIcon from "@mui/icons-material/Logout";
 import StorageIcon from '@mui/icons-material/Storage';
 import ExtensionIcon from '@mui/icons-material/Extension';
 import TuneIcon from '@mui/icons-material/Tune';
@@ -35,7 +45,8 @@ const WorldSettingsPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  // Sidebar states
+  const [showRestartDialog, setShowRestartDialog] = useState(false);
+  // Sidebar state
   const [hovered, setHovered] = useState<string | undefined>(undefined);
 
   React.useEffect(() => {
@@ -70,15 +81,10 @@ const WorldSettingsPage: React.FC = () => {
         headers,
         body: new URLSearchParams({ servername, seed })
       });
-      await fetch(`/api/server/properties/set-nether`, {
+      await fetch(`/api/server/properties/other_dimensions`, {
         method: "POST",
         headers,
         body: new URLSearchParams({ servername, allow: netherEnd ? "true" : "false" })
-      });
-      await fetch(`/api/server/properties/set`, {
-        method: "POST",
-        headers,
-        body: new URLSearchParams({ servername, key: "allow-end", value: netherEnd ? "true" : "false" })
       });
       await fetch(`/api/server/properties/set-difficulty`, {
         method: "POST",
@@ -86,6 +92,9 @@ const WorldSettingsPage: React.FC = () => {
         body: new URLSearchParams({ servername, difficulty })
       });
       setSuccess(true);
+      // Check if server is running and show dialog
+      const running = await isServerRunning(servername, token || undefined);
+      if (running) setShowRestartDialog(true);
     } catch (e) {
       setError("Failed to save world settings.");
     }
@@ -101,54 +110,135 @@ const WorldSettingsPage: React.FC = () => {
         background: "linear-gradient(135deg, #0f2027 0%, #2c5364 100%)",
       }}
     >
-      {/* Sidebar (copied from PanelServers.tsx) */}
-      <Box
-        sx={{
-          height: "100vh",
-          width: hovered ? SIDEBAR_EXPANDED : SIDEBAR_WIDTH,
-          transition: "width 0.25s cubic-bezier(.4,2,.6,1)",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          alignItems: "center",
-          background: "rgba(30,40,60,0.92)",
-          boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.37)",
-          borderTopRightRadius: 32,
-          borderBottomRightRadius: 32,
-          py: 3,
-        }}
-        onMouseLeave={() => setHovered(undefined)}
-      >
-        <Box sx={{ width: "100%", flex: 1 }}>
-          {menuItems.map(item => (
-            <Box
-              key={item.key}
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 2,
-                px: hovered ? 3 : 0,
-                py: 2,
-                cursor: "pointer",
-                transition: "background 0.2s",
-                background: hovered === item.key ? "rgba(144,202,249,0.08)" : "none",
-                borderRadius: 2,
-                mb: 1,
-              }}
-              onMouseEnter={() => setHovered(item.key)}
-            >
-              {item.icon}
-              {hovered && (
-                <Typography sx={{ color: '#b0c4de', fontWeight: 600, ml: 2 }}>{item.label}</Typography>
-              )}
-            </Box>
-          ))}
+      {/* Sidebar und Zurück-Button: Button rechts von Sidebar */}
+      <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start' }}>
+        <Box
+          sx={{
+            height: "100vh",
+            width: hovered ? SIDEBAR_EXPANDED : SIDEBAR_WIDTH,
+            transition: "width 0.25s cubic-bezier(.4,2,.6,1)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            alignItems: "center",
+            background: "rgba(30,40,60,0.92)",
+            boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.37)",
+            borderTopRightRadius: 32,
+            borderBottomRightRadius: 32,
+            py: 3,
+            mt: 0,
+          }}
+          onMouseLeave={() => setHovered(undefined)}
+        >
+          {/* Sidebar-Icons wie PanelServers: links, Text beim Ausfahren */}
+          <Box sx={{ width: "100%", flex: 1 }}>
+            {menuItems.map(item => (
+              <Tooltip key={item.key} title={item.label} placement="right">
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: hovered ? 'flex-start' : 'center',
+                    px: hovered ? 2 : 0,
+                    py: 1.5,
+                    cursor: "pointer",
+                    color: hovered === item.key ? "#1976d2" : "#fff",
+                    background: hovered === item.key ? "rgba(144,202,249,0.08)" : undefined,
+                    borderRadius: 2,
+                    my: 1,
+                    transition: "background 0.2s, color 0.2s",
+                    '&:hover': { background: "rgba(255,255,255,0.08)" },
+                  }}
+                  onMouseEnter={() => setHovered(item.key)}
+                  onClick={() => {
+                    if (item.key === "servers") window.location.href = "/servers";
+                    if (item.key === "plugins") window.location.href = "/plugins";
+                    if (item.key === "controls") window.location.href = "/controls";
+                  }}
+                >
+                  {item.icon}
+                  <Slide direction="right" in={hovered === item.key} mountOnEnter unmountOnExit>
+                    <Typography sx={{ ml: 2, fontWeight: 600, color: "#b0c4de", whiteSpace: "nowrap" }}>
+                      {item.label}
+                    </Typography>
+                  </Slide>
+                </Box>
+              </Tooltip>
+            ))}
+          </Box>
+          {/* Footer: Settings und Logout, zentriert bei eingefahrener Sidebar, links bei ausgefahrener */}
+          <Box sx={{ width: "100%", pb: 1 }}>
+            <Tooltip title="Settings" placement="right">
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: hovered ? 'flex-start' : 'center',
+                  px: hovered ? 2 : 0,
+                  py: 2,
+                  cursor: "pointer",
+                  color: hovered === "settings" ? "#1976d2" : "#fff",
+                  background: hovered === "settings" ? "rgba(144,202,249,0.08)" : undefined,
+                  borderRadius: 2,
+                  mb: 1,
+                  transition: "background 0.2s, color 0.2s",
+                  '&:hover': { background: "rgba(255,255,255,0.08)" },
+                }}
+                onMouseEnter={() => setHovered("settings")}
+              >
+                <SettingsIcon fontSize="large" />
+                <Slide direction="right" in={hovered === "settings"} mountOnEnter unmountOnExit>
+                  <Typography sx={{ ml: 2, fontWeight: 600, color: "#b0c4de", whiteSpace: "nowrap" }}>
+                    Settings
+                  </Typography>
+                </Slide>
+              </Box>
+            </Tooltip>
+            <Tooltip title="Logout" placement="right">
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: hovered ? 'flex-start' : 'center',
+                  px: hovered ? 2 : 0,
+                  py: 2,
+                  cursor: "pointer",
+                  color: hovered === "logout" ? "#f44336" : "#fff",
+                  background: hovered === "logout" ? "rgba(244, 67, 54, 0.08)" : undefined,
+                  borderRadius: 2,
+                  transition: "background 0.2s, color 0.2s",
+                  '&:hover': { background: "rgba(255,255,255,0.08)" },
+                }}
+                onMouseEnter={() => setHovered("logout")}
+                onClick={() => window.location.href = '/login'}
+              >
+                <LogoutIcon fontSize="large" />
+                <Slide direction="right" in={hovered === "logout"} mountOnEnter unmountOnExit>
+                  <Typography sx={{ ml: 2, fontWeight: 600, color: "#f44336", whiteSpace: "nowrap" }}>
+                    Logout
+                  </Typography>
+                </Slide>
+              </Box>
+            </Tooltip>
+          </Box>
         </Box>
-        <Box sx={{ width: "100%" }}>
-          {/* Optional: Sidebar footer */}
-        </Box>
+        <Button
+          onClick={() => window.history.back()}
+          variant="outlined"
+          sx={{
+            color: '#b0c4de',
+            borderColor: '#334155',
+            fontWeight: 600,
+            mt: 3,
+            ml: 2,
+            height: 40,
+            zIndex: 2
+          }}
+        >
+          Back
+        </Button>
       </Box>
-      {/* Main Content */}
+  {/* Main Content */}
       <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <Paper
           elevation={10}
@@ -222,6 +312,22 @@ const WorldSettingsPage: React.FC = () => {
             </Button>
           </Box>
         </Paper>
+        <Dialog open={showRestartDialog} onClose={() => setShowRestartDialog(false)}>
+          <DialogTitle>Do you want to restart this server?</DialogTitle>
+          <DialogContent>
+            <Typography>
+              This is required for a running server, otherwise your changes will not take effect immediately.
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setShowRestartDialog(false)} color="inherit">Cancel</Button>
+            <Button onClick={async () => {
+              setShowRestartDialog(false);
+              const token = localStorage.getItem("token");
+              await restartServer(servername || "", token || undefined);
+            }} color="primary" variant="contained">Restart</Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </Box>
   );

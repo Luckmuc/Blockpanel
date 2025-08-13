@@ -1,16 +1,25 @@
 # Production Build für React/Vite + nginx
 FROM node:20-slim AS build
 WORKDIR /app
+
+# Set Node.js memory limit to prevent out-of-memory issues
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
+# Copy package files
 COPY package.json package-lock.json* ./
-RUN npm install
-RUN npm install jwt-decode
-RUN npm install --save-dev @types/jwt-decode
-# Install MUI, emotion, and react dependencies for build
-RUN npm install @mui/material @mui/icons-material @emotion/react @emotion/styled react
-RUN npm install --save-dev @types/react
-RUN npm install --save-dev @types/react @types/react-dom
-RUN npm install axios
+
+# Install all dependencies in one step to optimize layer caching
+RUN npm ci --only=production=false \
+    && npm install jwt-decode \
+    && npm install --save-dev @types/jwt-decode \
+    && npm install @mui/material @mui/icons-material @emotion/react @emotion/styled react \
+    && npm install --save-dev @types/react @types/react-dom \
+    && npm install axios
+
+# Copy source code
 COPY . .
+
+# Build the application
 RUN npm run build
 
 FROM nginx:1.25-alpine
