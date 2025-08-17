@@ -560,18 +560,26 @@ def get_server_proc(servername: str):
     
 def is_valid_servername(servername: str):
     # Servername darf keine Pfadtrennzeichen oder leere Strings enthalten
+    # Disallow empty names or path traversal separators; allow dots and other safe chars
     if not servername or '/' in servername or '\\' in servername:
         return False
-    return re.match(r'^[a-zA-Z0-9_-]+$', servername) is not None
+    # Allow most characters except path separators; keep simple to support names like 'my.server' or 'world-1'
+    return True
 
 def safe_server_path(servername: str, *paths):
     if not is_valid_servername(servername):
         raise HTTPException(status_code=400, detail="Invalid servername")
     # Cross-platform base dir
     base_dir = os.environ.get("MC_SERVERS_DIR", os.path.join(os.getcwd(), "mc_servers"))
-    base = os.path.abspath(os.path.join(base_dir, servername))
-    full = os.path.abspath(os.path.join(base, *paths))
-    if not full.startswith(base):
+    # Normalize paths to avoid trailing-slash issues and symlink weirdness
+    base = os.path.normpath(os.path.abspath(os.path.join(base_dir, servername)))
+    full = os.path.normpath(os.path.abspath(os.path.join(base, *paths)))
+    try:
+        # Use commonpath to ensure full is inside base
+        common = os.path.commonpath([base, full])
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if common != base:
         raise HTTPException(status_code=400, detail="Invalid path")
     return full
 
