@@ -1918,12 +1918,13 @@ def set_gamemode(
                 cmd2 = ["tmux", "send-keys", "-t", session, f"gamemode {gamemode} @a", "Enter"]
                 result2 = subprocess.run(cmd2, capture_output=True, text=True)
 
+                # ALWAYS update server.properties for persistence (even if tmux succeeds)
+                set_property_in_properties(servername, "gamemode", gamemode)
+
                 if result1.returncode == 0 and result2.returncode == 0:
                     return {"message": f"Gamemode applied to running server: {gamemode}"}
                 else:
-                    logging.warning(f"tmux commands had issues; falling back to server.properties for {servername}")
-                    # Fall back to writing server.properties
-                    set_property_in_properties(servername, "gamemode", gamemode)
+                    logging.warning(f"tmux commands had issues; server.properties updated for {servername}")
                     return {"message": f"Gamemode written to server.properties: {gamemode}"}
             except Exception as e:
                 logging.error(f"Exception while running tmux commands for {servername}: {e}")
