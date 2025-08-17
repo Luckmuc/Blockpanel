@@ -1908,25 +1908,23 @@ def set_gamemode(
         # If server is running, send the command to the server console via tmux
         if get_server_proc(servername):
             session = get_tmux_session(servername)
-            logging.info(f"Server {servername} is running - attempting to send gamemode commands via tmux (session={session})")
+            logging.info(f"Server {servername} is running - sending gamemode commands via tmux")
             try:
                 # Set the server default for future players
                 cmd1 = ["tmux", "send-keys", "-t", session, f"defaultgamemode {gamemode}", "Enter"]
                 result1 = subprocess.run(cmd1, capture_output=True, text=True)
-                logging.info(f"tmux defaultgamemode rc={result1.returncode}; stdout={result1.stdout}; stderr={result1.stderr}")
 
                 # Also change current players' gamemode immediately
                 cmd2 = ["tmux", "send-keys", "-t", session, f"gamemode {gamemode} @a", "Enter"]
                 result2 = subprocess.run(cmd2, capture_output=True, text=True)
-                logging.info(f"tmux gamemode rc={result2.returncode}; stdout={result2.stdout}; stderr={result2.stderr}")
 
                 if result1.returncode == 0 and result2.returncode == 0:
-                    return {"message": f"Gamemode applied to running server: {gamemode} (default + current players)"}
+                    return {"message": f"Gamemode applied to running server: {gamemode}"}
                 else:
-                    logging.warning(f"tmux commands returned non-zero; falling back to updating server.properties for {servername}")
+                    logging.warning(f"tmux commands had issues; falling back to server.properties for {servername}")
                     # Fall back to writing server.properties
                     set_property_in_properties(servername, "gamemode", gamemode)
-                    return {"message": f"Gamemode written to server.properties due to tmux failure: {gamemode}", "tmux_results": {"default": {"rc": result1.returncode, "stderr": result1.stderr}, "gamemode": {"rc": result2.returncode, "stderr": result2.stderr}}}
+                    return {"message": f"Gamemode written to server.properties: {gamemode}"}
             except Exception as e:
                 logging.error(f"Exception while running tmux commands for {servername}: {e}")
                 # Best-effort: persist to server.properties
@@ -1955,7 +1953,23 @@ def set_allow_cheats(
         set_property_in_properties(servername, "allow-cheats", "true" if allow_cheats else "false")
         logging.info(f"Set allow-cheats to {allow_cheats} for {servername}")
         
-        return {"message": f"Allow cheats set to {allow_cheats}"}
+        # If server is running, apply the change via tmux as well
+        if get_server_proc(servername):
+            try:
+                session = get_tmux_session(servername)
+                # Send reload command to apply the change
+                cmd = ["tmux", "send-keys", "-t", session, "reload", "Enter"]
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                logging.info(f"tmux reload for cheats change rc={result.returncode}; stdout={result.stdout}; stderr={result.stderr}")
+                if result.returncode == 0:
+                    return {"message": f"Allow cheats set to {allow_cheats} and reloaded on running server"}
+                else:
+                    return {"message": f"Allow cheats set to {allow_cheats} in server.properties (reload failed, restart may be needed)"}
+            except Exception as e:
+                logging.error(f"Exception while reloading server for cheats change: {e}")
+                return {"message": f"Allow cheats set to {allow_cheats} in server.properties (reload failed, restart may be needed)"}
+        else:
+            return {"message": f"Allow cheats set to {allow_cheats}"}
     except Exception as e:
         logging.error(f"Error setting allow-cheats for {servername}: {e}")
         raise HTTPException(status_code=500, detail=str(e))

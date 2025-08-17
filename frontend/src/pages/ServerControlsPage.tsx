@@ -285,7 +285,7 @@ const ServerControlsPage: React.FC = () => {
 
   async function loadRightsSettings() {
     try {
-  const token = auth?.token || "";
+      const token = auth?.token || "";
 
       const opsRes = await fetch(`/api/server/ops?servername=${encodeURIComponent(servername)}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -297,6 +297,7 @@ const ServerControlsPage: React.FC = () => {
         adminsUUIDs = opsData.ops || [];
       }
 
+      // Load current gamemode and cheats from properties API
       const propsRes = await fetch(`/api/server/properties?servername=${encodeURIComponent(servername)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -305,8 +306,7 @@ const ServerControlsPage: React.FC = () => {
       let cheats = false;
       if (propsRes.ok) {
         const propsData = await propsRes.json();
-        // backend returns a flat map of properties, not nested under `properties`
-        gamemode = propsData.gamemode || gamemode;
+        gamemode = propsData.gamemode || "survival";
         cheats = String(propsData["allow-cheats"]).toLowerCase() === "true";
       }
 
