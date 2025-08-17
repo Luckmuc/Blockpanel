@@ -1,7 +1,35 @@
 services:
   backend:
+    b  frontend:
     build:
-      context: ./backend
+      context: ./frontend
+      dockerfile: Dockerfile
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "1105:1105"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - minecraft_network
+
+  mc-head-service:
+    image: node:18-alpine
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+    command: ["node", "mc-head-service.js"]
+    restart: unless-stopped
+    networks:
+      - minecraft_network
+
+  proxy:ext: ./backend
       dockerfile: Dockerfile
     volumes:
       - ./backend:/app

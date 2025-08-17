@@ -62,6 +62,48 @@ def set_seed(servername: str = Form(...), seed: str = Form(...), current_user: d
     set_property_in_properties(servername, "level-seed", seed)
     return {"message": f"Seed gesetzt: {seed}"}
 
+@router.post("/server/properties/set-seed-with-world-reset")
+def set_seed_with_world_reset(servername: str = Form(...), seed: str = Form(...), current_user: dict = Depends(get_current_user)):
+    """
+    Setzt einen neuen Seed und löscht die bestehenden World-Ordner,
+    damit eine neue Welt mit dem neuen Seed generiert wird.
+    """
+    import shutil
+    
+    mc_servers_dir = os.environ.get("MC_SERVERS_DIR", os.path.join(os.getcwd(), "mc_servers"))
+    server_path = os.path.join(mc_servers_dir, servername)
+    if not os.path.exists(server_path):
+        raise HTTPException(status_code=404, detail=f"Server '{servername}' nicht gefunden")
+    
+    # Prüfen ob Server läuft
+    if get_server_proc(servername):
+        raise HTTPException(status_code=400, detail="Server muss gestoppt werden bevor die Welt zurückgesetzt werden kann")
+    
+    try:
+        # World-Ordner löschen
+        world_folders = ["world", "world_nether", "world_the_end"]
+        deleted_folders = []
+        
+        for folder in world_folders:
+            folder_path = os.path.join(server_path, folder)
+            if os.path.exists(folder_path):
+                shutil.rmtree(folder_path)
+                deleted_folders.append(folder)
+                logging.info(f"Deleted world folder: {folder_path}")
+        
+        # Seed setzen
+        set_property_in_properties(servername, "level-seed", seed)
+        
+        return {
+            "message": f"Seed auf '{seed}' gesetzt und Welt zurückgesetzt",
+            "deleted_folders": deleted_folders,
+            "warning": "Die alte Welt wurde unwiderruflich gelöscht"
+        }
+        
+    except Exception as e:
+        logging.error(f"Fehler beim Zurücksetzen der Welt für {servername}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Fehler beim Zurücksetzen der Welt: {str(e)}")
+
 
 @router.post("/server/properties/other_dimensions")
 def set_other_dimensions(servername: str = Form(...), allow: bool = Form(...), current_user: dict = Depends(get_current_user)):
@@ -69,6 +111,18 @@ def set_other_dimensions(servername: str = Form(...), allow: bool = Form(...), c
     set_property_in_properties(servername, "allow-nether", "true" if allow else "false")
     set_property_in_properties(servername, "allow-end", "true" if allow else "false")
     return {"message": f"Nether & End {'erlaubt' if allow else 'verboten'}"}
+
+
+@router.post("/server/properties/set-nether")
+def set_nether(servername: str = Form(...), allow: str = Form(...), current_user: dict = Depends(get_current_user)):
+    """
+    Set only the allow-nether property based on the incoming form value.
+    Accepts boolean-like strings: "true"/"false", "1"/"0", etc.
+    """
+    val = str(allow).lower()
+    allow_bool = val in ("1", "true", "yes", "on")
+    set_property_in_properties(servername, "allow-nether", "true" if allow_bool else "false")
+    return {"message": f"allow-nether set to {str(allow_bool).lower()}"}
 
 @router.post("/server/properties/set-difficulty")
 def set_difficulty(servername: str = Form(...), difficulty: str = Form(...), current_user: dict = Depends(get_current_user)):
@@ -850,7 +904,7 @@ def get_system_ram(current_user: dict = Depends(get_current_user)):
     }
 
 @router.post("/server/restart")
-def restart_server(servername: str, current_user: dict = Depends(get_current_user)):
+def restart_server(servername: str = Form(...), current_user: dict = Depends(get_current_user)):
     logging.info(f"Restart: Stopping server {servername}")
     stop_response = stop_server(servername, current_user)
     if stop_response["status"] != "stopped":
@@ -1348,6 +1402,33 @@ def get_properties(servername: str, current_user: dict = Depends(get_current_use
                 props[k] = v
     return props
 
+
+@router.get("/server/properties/get")
+def get_world_properties(servername: str, current_user: dict = Depends(get_current_user)):
+    """
+    Return a small set of world-related properties for the frontend World Settings dialog.
+    Fields: seed (level-seed), nether_end (derived from allow-nether and allow-end), difficulty
+    """
+    prop_path = safe_server_path(servername, "server.properties")
+    if not os.path.exists(prop_path):
+        raise HTTPException(status_code=404, detail="server.properties not found")
+    props = {}
+    with open(prop_path, "r", encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            if "=" in line and not line.strip().startswith("#"):
+                k, v = line.strip().split("=", 1)
+                props[k] = v
+
+    seed = props.get("level-seed", "")
+    # allow-nether and allow-end are strings like 'true'/'false'
+    allow_nether = props.get("allow-nether", "true").lower() == "true"
+    allow_end = props.get("allow-end", "true").lower() == "true"
+    # We'll expose a single boolean indicating whether both dimensions are enabled
+    nether_end = allow_nether and allow_end
+    difficulty = props.get("difficulty", "normal")
+
+    return {"seed": seed, "nether_end": nether_end, "difficulty": difficulty}
+
 @router.post("/server/properties/set")
 def set_property(
     servername: str = Form(...),
@@ -1499,25 +1580,93 @@ def set_server_ops(
                 "bypassesPlayerLimit": False
             })
         
-        # Write to ops.json
+        # Lade vorherige Admins VOR dem Überschreiben
         ops_path = safe_server_path(servername, "ops.json")
+        old_ops = []
+        if os.path.exists(ops_path):
+            with open(ops_path, "r", encoding="utf-8") as f:
+                try:
+                    old_ops = json.load(f)
+                except Exception:
+                    old_ops = []
+
+        # Schreibe neue ops.json
         with open(ops_path, "w") as f:
             json.dump(ops_entries, f, indent=2)
-        
+
         logging.info(f"Updated ops.json for {servername} with {len(ops_entries)} operators")
-        
-        # If server is running, reload ops
+
+        # Wenn Server läuft: entfernte Admins deoppen, neue Admins oppen
         if get_server_proc(servername):
             try:
                 session = get_tmux_session(servername)
-                subprocess.run([
-                    "tmux", "send-keys", "-t", session, 
-                    "/op reload", "Enter"
-                ], check=True)
-                logging.info(f"Reloaded ops for running server {servername}")
+
+                old_names = set(o["name"] for o in old_ops if "name" in o)
+                new_names = set(o["name"] for o in ops_entries if "name" in o)
+
+                logging.info(f"[DEBUG] Alte Admins: {old_names}")
+                logging.info(f"[DEBUG] Neue Admins: {new_names}")
+                logging.info(f"[DEBUG] Zu entfernen: {old_names - new_names}")
+                logging.info(f"[DEBUG] Hinzuzufügen: {new_names - old_names}")
+
+                # Deop für entfernte Admins
+                for removed_name in old_names - new_names:
+                    tmux_cmd = [
+                        "tmux", "send-keys", "-t", session, f"deop {removed_name}", "C-m"
+                    ]
+                    logging.info(f"[DEBUG] Running tmux command: {' '.join(tmux_cmd)}")
+                    try:
+                        result = subprocess.run(tmux_cmd, capture_output=True, text=True)
+                        logging.info(f"[DEBUG] tmux stdout: {result.stdout}")
+                        logging.info(f"[DEBUG] tmux stderr: {result.stderr}")
+                        if result.returncode != 0:
+                            logging.error(f"[ERROR] tmux deop command failed for {removed_name} (rc={result.returncode})")
+                    except Exception as e:
+                        logging.error(f"[ERROR] Exception beim Senden von deop an tmux: {e}")
+                    logging.info(f"Sent deop command for player {removed_name}")
+
+                # Op nur für wirklich neue Admins (die vorher nicht drin waren)
+                for added_name in new_names - old_names:
+                    tmux_cmd = [
+                        "tmux", "send-keys", "-t", session, f"op {added_name}", "C-m"
+                    ]
+                    logging.info(f"[DEBUG] Running tmux command: {' '.join(tmux_cmd)}")
+                    try:
+                        result = subprocess.run(tmux_cmd, capture_output=True, text=True)
+                        logging.info(f"[DEBUG] tmux stdout: {result.stdout}")
+                        logging.info(f"[DEBUG] tmux stderr: {result.stderr}")
+                        if result.returncode != 0:
+                            logging.error(f"[ERROR] tmux op command failed for {added_name} (rc={result.returncode})")
+                    except Exception as e:
+                        logging.error(f"[ERROR] Exception beim Senden von op an tmux: {e}")
+                    logging.info(f"Sent op command for player {added_name}")
+
+                # Reload für Sicherheit
+                tmux_cmd = [
+                    "tmux", "send-keys", "-t", session, "reload", "C-m"
+                ]
+                logging.info(f"[DEBUG] Running tmux command: {' '.join(tmux_cmd)}")
+                try:
+                    result = subprocess.run(tmux_cmd, capture_output=True, text=True)
+                    logging.info(f"[DEBUG] tmux stdout: {result.stdout}")
+                    logging.info(f"[DEBUG] tmux stderr: {result.stderr}")
+                    if result.returncode != 0:
+                        logging.error(f"[ERROR] tmux reload command failed (rc={result.returncode})")
+                except Exception as e:
+                    logging.error(f"[ERROR] Exception beim Senden von reload an tmux: {e}")
+                logging.info(f"Sent reload command for ops in server {servername}")
             except Exception as e:
-                logging.warning(f"Failed to reload ops for {servername}: {e}")
-        
+                logging.error(f"[ERROR] Fehler im tmux-Admin-Update: {e}")
+        else:
+            # Server offline: Nur Listen aktualisieren, keine tmux-Kommandos
+            old_names = set(o["name"] for o in old_ops if "name" in o)
+            new_names = set(o["name"] for o in ops_entries if "name" in o)
+            logging.info(f"[DEBUG] (OFFLINE) Alte Admins: {old_names}")
+            logging.info(f"[DEBUG] (OFFLINE) Neue Admins: {new_names}")
+            logging.info(f"[DEBUG] (OFFLINE) Zu entfernen: {old_names - new_names}")
+            logging.info(f"[DEBUG] (OFFLINE) Hinzuzufügen: {new_names - old_names}")
+            logging.info(f"[DEBUG] Server offline, nur ops.json aktualisiert für {servername}")
+
         return {"message": f"Successfully updated {len(ops_entries)} operators"}
     
     except json.JSONDecodeError:
@@ -1536,8 +1685,21 @@ def set_banned_players(
     import json
     from datetime import datetime
     try:
+        logging.info(f"set_banned_players called by user: {current_user.get('username', 'unknown')}")
+        logging.info(f"Form data: servername={servername}, banned_data={banned_data}")
+        
         # Parse the banned data
         banned_list = json.loads(banned_data)
+        logging.info(f"Parsed banned_list: {banned_list}")
+        
+        # Load current banned players list for comparison
+        banned_path = safe_server_path(servername, "banned-players.json")
+        current_banned = []
+        try:
+            with open(banned_path, "r") as f:
+                current_banned = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            logging.info(f"No existing banned-players.json found for {servername}, starting fresh")
         
         # Create banned-players.json format
         banned_entries = []
@@ -1551,24 +1713,68 @@ def set_banned_players(
                 "reason": "Banned by admin"
             })
         
+        # Compare and log changes
+        current_banned_names = {entry.get("name") for entry in current_banned if entry.get("name")}
+        new_banned_names = {entry.get("name") for entry in banned_entries if entry.get("name")}
+        
+        added_bans = new_banned_names - current_banned_names
+        removed_bans = current_banned_names - new_banned_names
+        
+        if added_bans:
+            logging.info(f"Adding bans for players: {', '.join(added_bans)}")
+        if removed_bans:
+            logging.info(f"Removing bans for players: {', '.join(removed_bans)}")
+        if not added_bans and not removed_bans:
+            logging.info("No changes to banned players list")
+        
         # Write to banned-players.json
-        banned_path = safe_server_path(servername, "banned-players.json")
         with open(banned_path, "w") as f:
             json.dump(banned_entries, f, indent=2)
-        
         logging.info(f"Updated banned-players.json for {servername} with {len(banned_entries)} banned players")
         
-        # If server is running, reload bans
-        if get_server_proc(servername):
+        # Check if server is running
+        is_running = get_server_proc(servername) is not None
+        logging.info(f"Server {servername} is {'running' if is_running else 'offline'}")
+        
+        # If server is running, apply changes via tmux commands
+        if is_running and (added_bans or removed_bans):
             try:
                 session = get_tmux_session(servername)
+                logging.info(f"Applying banned players changes to running server {servername}")
+                
+                # Unban removed players
+                for player_name in removed_bans:
+                    subprocess.run([
+                        "tmux", "send-keys", "-t", session, 
+                        f"pardon {player_name}", "Enter"
+                    ], check=True)
+                    logging.info(f"Sent pardon command for player {player_name}")
+                
+                # Ban added players
+                for player_name in added_bans:
+                    subprocess.run([
+                        "tmux", "send-keys", "-t", session, 
+                        f"ban {player_name} Banned by admin", "Enter"
+                    ], check=True)
+                    logging.info(f"Sent ban command for player {player_name}")
+                    
+                    # Kick if currently online
+                    subprocess.run([
+                        "tmux", "send-keys", "-t", session, 
+                        f"kick {player_name} You have been banned from this server", "Enter"
+                    ], check=True)
+                    logging.info(f"Sent kick command for banned player {player_name}")
+                
+                # Reload banlist to ensure consistency
                 subprocess.run([
                     "tmux", "send-keys", "-t", session, 
-                    "/banlist reload", "Enter"
+                    "banlist reload", "Enter"
                 ], check=True)
-                logging.info(f"Reloaded banned players for running server {servername}")
+                logging.info(f"Sent banlist reload command for running server {servername}")
+                
             except Exception as e:
-                logging.warning(f"Failed to reload banned players for {servername}: {e}")
+                logging.warning(f"Failed to apply banned players changes to running server {servername}: {e}")
+                # Still return success since file was updated
         
         return {"message": f"Successfully updated {len(banned_entries)} banned players"}
     
@@ -1587,8 +1793,21 @@ def set_whitelist(
     """Set whitelisted players in whitelist.json"""
     import json
     try:
+        logging.info(f"set_whitelist called by user: {current_user.get('username', 'unknown')}")
+        logging.info(f"Form data: servername={servername}, whitelist_data={whitelist_data}")
+        
         # Parse the whitelist data
         whitelist_list = json.loads(whitelist_data)
+        logging.info(f"Parsed whitelist_list: {whitelist_list}")
+        
+        # Load current whitelist for comparison
+        whitelist_path = safe_server_path(servername, "whitelist.json")
+        current_whitelist = []
+        try:
+            with open(whitelist_path, "r") as f:
+                current_whitelist = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            logging.info(f"No existing whitelist.json found for {servername}, starting fresh")
         
         # Create whitelist.json format
         whitelist_entries = []
@@ -1598,26 +1817,69 @@ def set_whitelist(
                 "name": player["name"]
             })
         
+        # Compare and log changes
+        current_whitelist_names = {entry.get("name") for entry in current_whitelist if entry.get("name")}
+        new_whitelist_names = {entry.get("name") for entry in whitelist_entries if entry.get("name")}
+        
+        added_whitelist = new_whitelist_names - current_whitelist_names
+        removed_whitelist = current_whitelist_names - new_whitelist_names
+        
+        if added_whitelist:
+            logging.info(f"Adding to whitelist: {', '.join(added_whitelist)}")
+        if removed_whitelist:
+            logging.info(f"Removing from whitelist: {', '.join(removed_whitelist)}")
+        if not added_whitelist and not removed_whitelist:
+            logging.info("No changes to whitelist")
+        
         # Write to whitelist.json
-        whitelist_path = safe_server_path(servername, "whitelist.json")
         with open(whitelist_path, "w") as f:
             json.dump(whitelist_entries, f, indent=2)
-        
         logging.info(f"Updated whitelist.json for {servername} with {len(whitelist_entries)} whitelisted players")
         
-        # If server is running, reload whitelist
-        if get_server_proc(servername):
+        # Check if server is running
+        is_running = get_server_proc(servername) is not None
+        logging.info(f"Server {servername} is {'running' if is_running else 'offline'}")
+        
+        # If server is running, apply changes via tmux commands
+        if is_running and (added_whitelist or removed_whitelist):
             try:
                 session = get_tmux_session(servername)
+                logging.info(f"Applying whitelist changes to running server {servername}")
+                
+                # Remove players from whitelist
+                for player_name in removed_whitelist:
+                    subprocess.run([
+                        "tmux", "send-keys", "-t", session, 
+                        f"whitelist remove {player_name}", "Enter"
+                    ], check=True)
+                    logging.info(f"Sent whitelist remove command for player {player_name}")
+                
+                # Add players to whitelist
+                for player_name in added_whitelist:
+                    subprocess.run([
+                        "tmux", "send-keys", "-t", session, 
+                        f"whitelist add {player_name}", "Enter"
+                    ], check=True)
+                    logging.info(f"Sent whitelist add command for player {player_name}")
+                
+                # Reload whitelist to ensure consistency
                 subprocess.run([
                     "tmux", "send-keys", "-t", session, 
-                    "/whitelist reload", "Enter"
+                    "whitelist reload", "Enter"
                 ], check=True)
-                logging.info(f"Reloaded whitelist for running server {servername}")
+                logging.info(f"Sent whitelist reload command for running server {servername}")
+                
             except Exception as e:
-                logging.warning(f"Failed to reload whitelist for {servername}: {e}")
+                logging.warning(f"Failed to apply whitelist changes to running server {servername}: {e}")
+                # Still return success since file was updated
         
         return {"message": f"Successfully updated {len(whitelist_entries)} whitelisted players"}
+    
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON in whitelist_data")
+    except Exception as e:
+        logging.error(f"Error setting whitelist for {servername}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON in whitelist_data")
@@ -1635,11 +1897,41 @@ def set_gamemode(
     try:
         if gamemode not in ["survival", "creative", "adventure", "spectator"]:
             raise HTTPException(status_code=400, detail="Invalid gamemode")
-        
+        # If server is running, send the command to the server console via tmux
+        if get_server_proc(servername):
+            session = get_tmux_session(servername)
+            logging.info(f"Server {servername} is running - attempting to send gamemode commands via tmux (session={session})")
+            try:
+                # Set the server default for future players
+                cmd1 = ["tmux", "send-keys", "-t", session, f"defaultgamemode {gamemode}", "Enter"]
+                result1 = subprocess.run(cmd1, capture_output=True, text=True)
+                logging.info(f"tmux defaultgamemode rc={result1.returncode}; stdout={result1.stdout}; stderr={result1.stderr}")
+
+                # Also change current players' gamemode immediately
+                cmd2 = ["tmux", "send-keys", "-t", session, f"gamemode {gamemode} @a", "Enter"]
+                result2 = subprocess.run(cmd2, capture_output=True, text=True)
+                logging.info(f"tmux gamemode rc={result2.returncode}; stdout={result2.stdout}; stderr={result2.stderr}")
+
+                if result1.returncode == 0 and result2.returncode == 0:
+                    return {"message": f"Gamemode applied to running server: {gamemode} (default + current players)"}
+                else:
+                    logging.warning(f"tmux commands returned non-zero; falling back to updating server.properties for {servername}")
+                    # Fall back to writing server.properties
+                    set_property_in_properties(servername, "gamemode", gamemode)
+                    return {"message": f"Gamemode written to server.properties due to tmux failure: {gamemode}", "tmux_results": {"default": {"rc": result1.returncode, "stderr": result1.stderr}, "gamemode": {"rc": result2.returncode, "stderr": result2.stderr}}}
+            except Exception as e:
+                logging.error(f"Exception while running tmux commands for {servername}: {e}")
+                # Best-effort: persist to server.properties
+                try:
+                    set_property_in_properties(servername, "gamemode", gamemode)
+                except Exception as e2:
+                    logging.error(f"Also failed to write server.properties fallback for {servername}: {e2}")
+                raise HTTPException(status_code=500, detail=f"Failed to apply gamemode via tmux: {e}")
+
+        # Server is offline - persist to server.properties
         set_property_in_properties(servername, "gamemode", gamemode)
-        logging.info(f"Set gamemode to {gamemode} for {servername}")
-        
-        return {"message": f"Gamemode set to {gamemode}"}
+        logging.info(f"Set gamemode to {gamemode} for {servername} (server offline)")
+        return {"message": f"Gamemode set to {gamemode} in server.properties"}
     except Exception as e:
         logging.error(f"Error setting gamemode for {servername}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1674,7 +1966,7 @@ def kick_player(
             raise HTTPException(status_code=400, detail="Server is not running")
         
         session = get_tmux_session(servername)
-        kick_command = f"/kick {player_name} {reason}"
+        kick_command = f"kick {player_name} {reason}"
         
         subprocess.run([
             "tmux", "send-keys", "-t", session, 
@@ -1686,6 +1978,132 @@ def kick_player(
     
     except Exception as e:
         logging.error(f"Error kicking player {player_name} from {servername}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/server/command")
+def run_server_command(
+    servername: str = Form(...),
+    command: str = Form(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Execute an arbitrary server command in the server tmux session.
+
+    Expects form data: servername, command
+    Returns JSON with status and optional stdout/stderr if available.
+    """
+    try:
+        # Ensure server is running
+        if not get_server_proc(servername):
+            raise HTTPException(status_code=400, detail="Server is not running")
+
+        session = get_tmux_session(servername)
+        # Try to capture current pane text so we can detect any new output caused by the command.
+        initial_text = ""
+        try:
+            out = subprocess.check_output(["tmux", "capture-pane", "-p", "-t", session, "-S", "-200"], cwd=safe_server_path(servername))
+            initial_text = out.decode(errors="ignore")
+        except Exception:
+            # If capture fails, continue — we'll still send the command and possibly fall back to logs
+            initial_text = ""
+
+        # Send the command to tmux (Enter / C-m)
+        tmux_cmd = ["tmux", "send-keys", "-t", session, command, "Enter"]
+        logging.info(f"Running tmux command: {' '.join(tmux_cmd)}")
+        try:
+            result = subprocess.run(tmux_cmd, capture_output=True, text=True)
+        except Exception as e:
+            logging.error(f"Exception running tmux send-keys: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+        if result.returncode != 0:
+            logging.error(f"tmux send-keys returned rc={result.returncode}; stderr={result.stderr}")
+            return JSONResponse(status_code=500, content={"error": "tmux send-keys failed", "stderr": result.stderr})
+
+        # After sending, poll the tmux pane briefly for any new output produced by the server.
+        appended_lines: list[str] = []
+        try:
+            # small polling loop: configurable via environment variables
+            # COMMAND_POST_POLL_ITERATIONS (default 8)
+            # COMMAND_POST_POLL_INTERVAL_MS (default 100)
+            iterations = int(os.getenv('COMMAND_POST_POLL_ITERATIONS', '8'))
+            interval_ms = int(os.getenv('COMMAND_POST_POLL_INTERVAL_MS', '100'))
+            for _ in range(iterations):
+                time.sleep(interval_ms / 1000.0)
+                try:
+                    out = subprocess.check_output(["tmux", "capture-pane", "-p", "-t", session, "-S", "-200"], cwd=safe_server_path(servername))
+                    text = out.decode(errors="ignore")
+                except Exception:
+                    text = ""
+
+                if text and text != initial_text:
+                    # compute appended lines
+                    old_lines = initial_text.splitlines()
+                    new_lines = text.splitlines()
+                    if len(new_lines) > len(old_lines):
+                        appended = new_lines[len(old_lines):]
+                    else:
+                        appended = new_lines
+                    appended_lines = appended
+                    break
+        except Exception:
+            appended_lines = []
+
+        resp = {"status": "sent", "command": command}
+        if appended_lines:
+            resp["outputLines"] = appended_lines
+        return resp
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error in run_server_command: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/server/command/output")
+def get_console_output(servername: str, lines: int = 100, current_user: dict = Depends(get_current_user)):
+    """Return the last `lines` of console output for the server.
+
+    Tries to use `tmux capture-pane` for live consoles; falls back to reading
+    `logs/latest.log` or `server.log` when tmux is not available or session not running.
+    """
+    # Validate servername
+    if not is_valid_servername(servername):
+        raise HTTPException(status_code=400, detail="Invalid servername")
+
+    # Prefer live tmux output if session exists
+    try:
+        if get_server_proc(servername):
+            session = get_tmux_session(servername)
+            try:
+                # Capture last `lines` lines from tmux pane
+                out = subprocess.check_output(["tmux", "capture-pane", "-p", "-t", session, "-S", f"-{lines}"], cwd=safe_server_path(servername))
+                text = out.decode(errors="ignore")
+                return {"output": text}
+            except subprocess.CalledProcessError as e:
+                logging.warning(f"tmux capture-pane failed for {servername}: {e}")
+            except FileNotFoundError:
+                logging.warning("tmux not installed on system; falling back to log file")
+            except Exception as e:
+                logging.warning(f"tmux read error for {servername}: {e}")
+    except Exception:
+        # If get_server_proc or safe_server_path raises, ignore and fallback to logs
+        pass
+
+    # Fallback: read from server log files
+    log_path = safe_server_path(servername, "logs", "latest.log")
+    if not os.path.exists(log_path):
+        log_path = safe_server_path(servername, "server.log")
+    if not os.path.exists(log_path):
+        return {"output": ""}
+
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.readlines()
+        return {"output": "".join(content[-lines:])}
+    except Exception as e:
+        logging.error(f"Failed to read log for {servername}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/server/plugins/upload")
@@ -1821,4 +2239,216 @@ def get_proxy_status(current_user: dict = Depends(get_current_user)):
         }
     except Exception as e:
         logging.error(f"Error getting proxy status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/server/seed/get")
+def get_server_seed(servername: str, current_user: dict = Depends(get_current_user)):
+    """Get the world seed for a Minecraft server"""
+    import json
+    import struct
+    import gzip
+    from pathlib import Path
+    
+    try:
+        logging.info(f"Getting seed for server: {servername}")
+        
+        # Check if we have a cached seed first
+        server_dir = safe_server_path(servername, "")
+        seed_cache_path = os.path.join(server_dir, ".blockpanel_seed_cache.json")
+        
+        # Try to load cached seed
+        cached_seed = None
+        if os.path.exists(seed_cache_path):
+            try:
+                with open(seed_cache_path, "r") as f:
+                    cache_data = json.load(f)
+                    cached_seed = cache_data.get("seed")
+                    cache_time = cache_data.get("timestamp", 0)
+                    # Cache is valid for 24 hours
+                    if time.time() - cache_time < 86400:
+                        logging.info(f"Returning cached seed for {servername}: {cached_seed}")
+                        return {"seed": cached_seed, "source": "cache"}
+            except Exception as e:
+                logging.warning(f"Failed to read seed cache: {e}")
+        
+        # Check if server is running and try to get seed via command
+        is_running = get_server_proc(servername) is not None
+        if is_running:
+            try:
+                session = get_tmux_session(servername)
+                
+                # Send seed command and capture output
+                # We'll use a unique marker to identify our output
+                marker = f"BLOCKPANEL_SEED_{int(time.time())}"
+                
+                # Send the seed command
+                subprocess.run([
+                    "tmux", "send-keys", "-t", session, 
+                    f"say {marker}_START", "Enter"
+                ], check=True)
+                
+                time.sleep(0.1)  # Small delay
+                
+                subprocess.run([
+                    "tmux", "send-keys", "-t", session, 
+                    "seed", "Enter"
+                ], check=True)
+                
+                time.sleep(0.1)  # Small delay
+                
+                subprocess.run([
+                    "tmux", "send-keys", "-t", session, 
+                    f"say {marker}_END", "Enter"
+                ], check=True)
+                
+                # Wait a bit for the command to execute
+                time.sleep(1)
+                
+                # Try to read from the latest log file
+                log_path = safe_server_path(servername, "logs/latest.log")
+                if os.path.exists(log_path):
+                    try:
+                        with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                            lines = f.readlines()
+                        
+                        # Look for the seed output between our markers
+                        start_found = False
+                        for line in reversed(lines[-100:]):  # Check last 100 lines
+                            if f"{marker}_END" in line:
+                                start_found = True
+                                continue
+                            if start_found and f"{marker}_START" in line:
+                                break
+                            if start_found and "Seed:" in line:
+                                # Extract seed from line like "[INFO] Seed: [1234567890]"
+                                import re
+                                seed_match = re.search(r'Seed:\s*\[?(-?\d+)\]?', line)
+                                if seed_match:
+                                    seed = seed_match.group(1)
+                                    logging.info(f"Got seed from running server {servername}: {seed}")
+                                    
+                                    # Cache the seed
+                                    cache_data = {
+                                        "seed": seed,
+                                        "timestamp": time.time(),
+                                        "source": "server_command"
+                                    }
+                                    with open(seed_cache_path, "w") as f:
+                                        json.dump(cache_data, f)
+                                    
+                                    return {"seed": seed, "source": "server_command"}
+                    except Exception as e:
+                        logging.warning(f"Failed to read server log for seed: {e}")
+                
+                logging.info(f"Could not extract seed from server command output, falling back to level.dat")
+                
+            except Exception as e:
+                logging.warning(f"Failed to get seed from running server: {e}")
+        
+        # Fallback: Read seed from level.dat file
+        world_path = safe_server_path(servername, "world")
+        level_dat_path = os.path.join(world_path, "level.dat")
+        
+        if not os.path.exists(level_dat_path):
+            raise HTTPException(status_code=404, detail="World data not found (level.dat missing)")
+        
+        try:
+            # Try to read level.dat using nbtlib
+            try:
+                import nbtlib
+                with nbtlib.load(level_dat_path) as nbt_file:
+                    seed = nbt_file.root["Data"]["WorldGenSettings"]["seed"].value
+                    logging.info(f"Got seed from level.dat using nbtlib for {servername}: {seed}")
+                    
+                    # Cache the seed
+                    cache_data = {
+                        "seed": str(seed),
+                        "timestamp": time.time(),
+                        "source": "level_dat_nbtlib"
+                    }
+                    with open(seed_cache_path, "w") as f:
+                        json.dump(cache_data, f)
+                    
+                    return {"seed": str(seed), "source": "level_dat"}
+            except ImportError:
+                logging.warning("nbtlib not available, trying manual parsing")
+            except Exception as e:
+                logging.warning(f"Failed to read level.dat with nbtlib: {e}")
+            
+            # Fallback: Manual NBT parsing (basic implementation)
+            with open(level_dat_path, "rb") as f:
+                # Skip gzip header and try to find seed
+                data = f.read()
+                
+                # level.dat is gzip compressed
+                try:
+                    import gzip
+                    with gzip.open(level_dat_path, "rb") as gz_file:
+                        nbt_data = gz_file.read()
+                        
+                        # This is a very basic approach - look for "seed" string in the data
+                        # and extract the 8-byte long that follows
+                        seed_pos = nbt_data.find(b"seed")
+                        if seed_pos != -1:
+                            # Skip the string "seed" and its length indicator
+                            # NBT format: tag type (1 byte) + name length (2 bytes) + name + data
+                            # Look for the pattern and extract the long value
+                            for i in range(seed_pos + 4, len(nbt_data) - 8):
+                                try:
+                                    # Try to extract an 8-byte signed long
+                                    potential_seed = struct.unpack(">q", nbt_data[i:i+8])[0]
+                                    # Validate that this looks like a reasonable seed
+                                    if -9223372036854775808 <= potential_seed <= 9223372036854775807:
+                                        logging.info(f"Got seed from manual level.dat parsing for {servername}: {potential_seed}")
+                                        
+                                        # Cache the seed
+                                        cache_data = {
+                                            "seed": str(potential_seed),
+                                            "timestamp": time.time(),
+                                            "source": "level_dat_manual"
+                                        }
+                                        with open(seed_cache_path, "w") as f:
+                                            json.dump(cache_data, f)
+                                        
+                                        return {"seed": str(potential_seed), "source": "level_dat"}
+                                except struct.error:
+                                    continue
+                except Exception as e:
+                    logging.warning(f"Failed to decompress level.dat: {e}")
+                    
+        except Exception as e:
+            logging.error(f"Failed to read level.dat file: {e}")
+        
+        # If we have a cached seed from before, return it even if it's old
+        if cached_seed:
+            logging.info(f"Returning old cached seed for {servername}: {cached_seed}")
+            return {"seed": cached_seed, "source": "cache_fallback"}
+        
+        raise HTTPException(status_code=404, detail="Unable to determine world seed")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error getting seed for {servername}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/server/seed/cache/clear")
+def clear_seed_cache(
+    servername: str = Form(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Clear the cached seed for a server"""
+    try:
+        server_dir = safe_server_path(servername, "")
+        seed_cache_path = os.path.join(server_dir, ".blockpanel_seed_cache.json")
+        
+        if os.path.exists(seed_cache_path):
+            os.remove(seed_cache_path)
+            logging.info(f"Cleared seed cache for {servername}")
+            return {"message": "Seed cache cleared"}
+        else:
+            return {"message": "No seed cache found"}
+            
+    except Exception as e:
+        logging.error(f"Error clearing seed cache for {servername}: {e}")
         raise HTTPException(status_code=500, detail=str(e))

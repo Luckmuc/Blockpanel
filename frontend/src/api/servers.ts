@@ -284,3 +284,40 @@ export async function getServerStats(serverName: string, token?: string) {
     return { error: "API request failed" };
   }
 }
+
+// Get the world seed for a server
+export async function getServerSeed(serverName: string, token?: string) {
+  try {
+    const res = await fetch(`${API_BASE}/server/seed/get?servername=${encodeURIComponent(serverName)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      throw new Error("API request failed");
+    }
+    return res.json();
+  } catch (err) {
+    return { error: "API request failed" };
+  }
+}
+
+// Clear the cached seed for a server
+export async function clearServerSeedCache(serverName: string, token?: string) {
+  try {
+    const formData = new FormData();
+    formData.append('servername', serverName);
+    
+    const res = await fetch(`${API_BASE}/server/seed/cache/clear`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+    if (!res.ok) {
+      throw new Error("API request failed");
+    }
+    return res.json();
+  } catch (err) {
+    return { error: "API request failed" };
+  }
+}

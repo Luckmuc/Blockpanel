@@ -44,12 +44,9 @@ from auth import get_current_user
 
 app = FastAPI()
 
-# Endpoint to validate token and get current user
-@app.get("/api/me")
-def me(current_user: dict = Depends(get_current_user)):
-    return {"username": current_user["username"]}
+from fastapi import FastAPI, Depends, HTTPException, Form, Body, Request
+from fastapi.responses import JSONResponse, Response
 from fastapi.security import OAuth2PasswordRequestForm
-from fastapi.responses import JSONResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -59,6 +56,9 @@ from auth import authenticate_user, create_access_token, get_current_user, must_
 from routes import server_control
 from fastapi.middleware.cors import CORSMiddleware
 import re
+import httpx
+import json
+from typing import Optional
 
 
 def validate_username(username: str) -> bool:
@@ -105,31 +105,60 @@ app.add_middleware(
 
 app.include_router(server_control.router, prefix="/api")
 
-# Head service proxy routes
-@app.get("/api/head")
-async def proxy_head(username: str, size: Optional[int] = 64):
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(f"http://localhost:3001/api/head?username={username}&size={size}")
-            return Response(
-                content=response.content,
-                status_code=response.status_code,
-                headers={"Content-Type": response.headers.get("Content-Type", "image/png")}
-            )
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Head service error: {str(e)}")
+# Head service implementation (instead of proxy)
+from typing import Optional
 
 @app.get("/api/head/uuid")
-async def proxy_uuid(username: str):
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(f"http://localhost:3001/api/head/uuid?username={username}")
+async def get_player_uuid(username: str):
+    """Get UUID for a Minecraft player"""
+    try:
+        async with httpx.AsyncClient() as client:
+            # Query Mojang API
+            response = await client.get(f"https://api.mojang.com/users/profiles/minecraft/{username}")
             if response.status_code == 200:
-                return response.json()
+                data = response.json()
+                return {"uuid": data["id"], "name": data["name"]}
+            elif response.status_code == 404:
+                raise HTTPException(status_code=404, detail="Player not found")
             else:
-                raise HTTPException(status_code=response.status_code, detail="Player not found")
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"UUID service error: {str(e)}")
+                raise HTTPException(status_code=500, detail="Mojang API error")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=500, detail=f"Network error: {str(e)}")
+
+@app.get("/api/head")
+async def get_player_head(username: str, size: Optional[int] = 64):
+    """Get player head image"""
+    try:
+        # First get UUID
+        async with httpx.AsyncClient() as client:
+            mojang_response = await client.get(f"https://api.mojang.com/users/profiles/minecraft/{username}")
+            if mojang_response.status_code != 200:
+                raise HTTPException(status_code=404, detail="Player not found")
+            
+            uuid = mojang_response.json()["id"]
+            
+            # Get head image from crafatar
+            head_response = await client.get(f"https://crafatar.com/avatars/{uuid}?size={size}&overlay")
+            if head_response.status_code == 200:
+                return Response(
+                    content=head_response.content,
+                    status_code=200,
+                    headers={"Content-Type": "image/png"}
+                )
+            else:
+                raise HTTPException(status_code=500, detail="Could not fetch head image")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=500, detail=f"Network error: {str(e)}")
+
+# Compatibility: /api/player/lookup proxies to /api/head/uuid  
+@app.get("/api/player/lookup")
+async def player_lookup(username: str):
+    """Compatibility endpoint for player lookup"""
+    try:
+        uuid_data = await get_player_uuid(username)
+        return {"name": username, **uuid_data}
+    except HTTPException:
+        raise
 
 @app.post("/api/login")
 @limiter.limit("5/minute")

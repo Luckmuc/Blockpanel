@@ -4,6 +4,8 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // default build configuration - leave chunking to Vite/Rollup to avoid
+  // module initialization order problems that can arise from aggressive manualChunks.
   server: {
     proxy: {
       '/login': 'http://localhost:8000',

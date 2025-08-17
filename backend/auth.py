@@ -72,11 +72,15 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
+        logging.info(f"Auth: Validating token: {token[:20]}...")
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
+        logging.info(f"Auth: Token payload username: {username}")
         if username is None:
+            logging.warning("Auth: No username in token payload")
             raise credentials_exception
-    except JWTError:
+    except JWTError as e:
+        logging.warning(f"Auth: JWT Error: {e}")
         raise credentials_exception
     user = get_user(username)
     if user is None:

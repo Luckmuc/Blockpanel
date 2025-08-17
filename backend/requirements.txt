@@ -12,3 +12,4 @@ passlib==1.7.4
 slowapi
 PyYAML
 httpx
+nbtlib

@@ -4,7 +4,7 @@ import AddIcon from "@mui/icons-material/Add";
 import SettingsIcon from "@mui/icons-material/Settings";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import TuneIcon from "@mui/icons-material/Tune";
-import PublicIcon from "@mui/icons-material/Public";
+import TerminalIcon from "@mui/icons-material/Terminal";
 import StorageIcon from "@mui/icons-material/Storage";
 import ExtensionIcon from "@mui/icons-material/Extension";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
@@ -773,9 +773,9 @@ const PanelServers: React.FC = () => {
                       </Button>
                     </Tooltip>
                   )}
-                  <Tooltip title="World Settings">
-                    <IconButton color="primary" onClick={() => navigate(`/servers/${server.name}/world-settings`)}>
-                      <PublicIcon />
+                  <Tooltip title="Console">
+                    <IconButton color="primary" onClick={() => navigate(`/servers/${server.name}/console`)}>
+                      <TerminalIcon />
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Settings">

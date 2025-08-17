@@ -31,17 +31,26 @@ const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   // Automatische Token-Validierung beim Start
   useEffect(() => {
     if (token) {
-      fetch('/api/me', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      .then(res => {
-        if (!res.ok) {
+      // Nur validieren, wenn es ein "altes" Token ist (nicht gerade gesetzt)
+      const timer = setTimeout(() => {
+        fetch('/api/me', {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        .then(res => {
+          if (!res.ok) {
+            console.log('Token validation failed, clearing token');
+            clearToken();
+          } else {
+            console.log('Token validation successful');
+          }
+        })
+        .catch(() => {
+          console.log('Token validation error, clearing token');
           clearToken();
-        }
-      })
-      .catch(() => {
-        clearToken();
-      });
+        });
+      }, 1000); // 1 Sekunde warten nach Token-Setzung
+      
+      return () => clearTimeout(timer);
     }
   }, [token]);
 

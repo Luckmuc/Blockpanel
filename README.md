@@ -60,3 +60,16 @@ A private web panel for Minecraft server hosting. Built with Docker, FastAPI, an
 
 ## License
 MIT
+
+## Web Console (Frontend)
+
+The frontend includes an integrated server console page where you can send commands directly to a running Minecraft server.
+
+- How to use: open `Panel -> Console` for a server, type a command and press Enter or click Send.
+- Examples: `say Hello`, `seed`, `stop`, `kick <player>`, `ban <player>`.
+- Shortcut: Press Ctrl+K (or Cmd+K on macOS) to focus the console input quickly.
+- Docs dialog: The Console page has a "Docs" button with extended examples and plugin-specific commands.
+
+Notes:
+- Commands are sent to the server tmux session when available, so they behave like typing directly into the console.
+- If the server is stopped, the console will remain empty; check the server status first.
