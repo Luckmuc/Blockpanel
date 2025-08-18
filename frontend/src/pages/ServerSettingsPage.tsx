@@ -133,9 +133,14 @@ const ServerSettingsPage: React.FC = () => {
       if (isRunning) {
         // Nutze den dedizierten Restart-Endpoint
         await axios.post(
-          `${API_BASE}/server/restart?servername=${servername}`,
-          {},
-          { headers: token ? { Authorization: `Bearer ${token ?? undefined}` } : {} }
+          `${API_BASE}/server/restart`,
+          new URLSearchParams({ servername: servername ?? "" }),
+          { 
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              ...(token ? { Authorization: `Bearer ${token ?? undefined}` } : {})
+            }
+          }
         );
         notify({ type: 'success', message: 'Settings saved and server restarted.' });
       } else {
@@ -263,6 +268,7 @@ const ServerSettingsPage: React.FC = () => {
                 '&:hover': { background: "rgba(255,255,255,0.08)" },
               }}
               onMouseEnter={() => setHovered("settings")}
+              onClick={() => navigate("/settings")}
             >
               <SettingsIcon fontSize="large" />
               <Slide direction="right" in={hovered === "settings"} mountOnEnter unmountOnExit>

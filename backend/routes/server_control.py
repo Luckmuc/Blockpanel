@@ -915,16 +915,40 @@ def get_system_ram(current_user: dict = Depends(get_current_user)):
 def restart_server(servername: str = Form(...), current_user: dict = Depends(get_current_user)):
     logging.info(f"Restart: Stopping server {servername}")
     stop_response = stop_server(servername, current_user)
-    if stop_response["status"] != "stopped":
-        logging.warning(f"Restart: Stop failed or not running for {servername}: {stop_response}")
-        return stop_response
+    
+    # Handle JSONResponse objects
+    if hasattr(stop_response, 'status_code'):
+        if stop_response.status_code != 200:
+            logging.warning(f"Restart: Stop failed for {servername}: HTTP {stop_response.status_code}")
+            return stop_response
+        # If it's a successful JSONResponse, we assume the server was stopped
+        stop_status = "stopped"
+    else:
+        # Handle dictionary response
+        if stop_response["status"] != "stopped" and stop_response["status"] != "not running":
+            logging.warning(f"Restart: Stop failed or not running for {servername}: {stop_response}")
+            return stop_response
+        stop_status = stop_response["status"]
+    
     # Warte 2 Sekunden, damit Prozess wirklich beendet ist
     time.sleep(2)
     logging.info(f"Restart: Starting server {servername}")
     start_response = start_server_internal(servername, current_user)
-    if start_response.get("status") != "started":
-        logging.warning(f"Restart: Start failed for {servername}: {start_response}")
-        return start_response
+    
+    # Handle JSONResponse objects
+    if hasattr(start_response, 'status_code'):
+        if start_response.status_code != 200:
+            logging.warning(f"Restart: Start failed for {servername}: HTTP {start_response.status_code}")
+            return start_response
+        # If it's a successful JSONResponse, we assume the server was started
+        start_status = "started"
+    else:
+        # Handle dictionary response
+        if start_response.get("status") not in ["started", "booting"]:
+            logging.warning(f"Restart: Start failed for {servername}: {start_response}")
+            return start_response
+        start_status = start_response["status"]
+    
     logging.info(f"Restart: Server {servername} restarted successfully.")
     return {"status": "restarted"}
 

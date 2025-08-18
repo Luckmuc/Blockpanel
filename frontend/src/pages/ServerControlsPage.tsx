@@ -306,8 +306,12 @@ const ServerControlsPage: React.FC = () => {
       let cheats = false;
       if (propsRes.ok) {
         const propsData = await propsRes.json();
+        console.log("Properties data from API:", propsData);
         gamemode = propsData.gamemode || "survival";
         cheats = String(propsData["allow-cheats"]).toLowerCase() === "true";
+        console.log("Parsed values - gamemode:", gamemode, "cheats:", cheats);
+      } else {
+        console.error("Properties API failed:", propsRes.status, await propsRes.text());
       }
 
       setRightsSettings({
@@ -644,6 +648,7 @@ const ServerControlsPage: React.FC = () => {
                 '&:hover': { background: "rgba(255,255,255,0.08)" },
               }}
               onMouseEnter={() => setHovered("settings")}
+              onClick={() => navigate("/settings")}
             >
               <SettingsIcon fontSize="large" />
               <Slide direction="right" in={hovered === "settings"} mountOnEnter unmountOnExit>

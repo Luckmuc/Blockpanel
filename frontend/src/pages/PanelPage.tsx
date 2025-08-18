@@ -116,6 +116,7 @@ const PanelPage: React.FC = () => {
                 '&:hover': { background: "rgba(255,255,255,0.08)" },
               }}
               onMouseEnter={() => setHovered("settings")}
+              onClick={() => navigate("/settings")}
             >
               <SettingsIcon fontSize="large" />
               <Slide direction="right" in={hovered === "settings"} mountOnEnter unmountOnExit>

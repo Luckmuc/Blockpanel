@@ -90,9 +90,13 @@ const ChooseServerPage: React.FC = () => {
 
   // Helper: restart server
   const restartServer = async (server: string) => {
-    await fetch(`${API_BASE}/server/restart?servername=${encodeURIComponent(server)}`, {
+    await fetch(`${API_BASE}/server/restart`, {
       method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: new URLSearchParams({ servername: server }),
     });
   };
 
@@ -267,6 +271,7 @@ const ChooseServerPage: React.FC = () => {
                 '&:hover': { background: "rgba(255,255,255,0.08)" },
               }}
               onMouseEnter={() => setHovered("settings")}
+              onClick={() => navigate("/settings")}
             >
               <SettingsIcon fontSize="large" />
               <Slide direction="right" in={hovered === "settings"} mountOnEnter unmountOnExit>

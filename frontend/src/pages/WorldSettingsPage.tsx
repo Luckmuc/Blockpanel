@@ -12,7 +12,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import StorageIcon from '@mui/icons-material/Storage';
 import ExtensionIcon from '@mui/icons-material/Extension';
 import TuneIcon from '@mui/icons-material/Tune';
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   Box,
   Paper,
@@ -39,6 +39,7 @@ const menuItems = [
 
 const WorldSettingsPage: React.FC = () => {
   const { servername } = useParams<{ servername: string }>();
+  const navigate = useNavigate();
   const [seed, setSeed] = useState("");
   const [netherEnd, setNetherEnd] = useState(false);
   const [difficulty, setDifficulty] = useState("normal");
@@ -185,6 +186,7 @@ const WorldSettingsPage: React.FC = () => {
                   '&:hover': { background: "rgba(255,255,255,0.08)" },
                 }}
                 onMouseEnter={() => setHovered("settings")}
+                onClick={() => navigate("/settings")}
               >
                 <SettingsIcon fontSize="large" />
                 <Slide direction="right" in={hovered === "settings"} mountOnEnter unmountOnExit>

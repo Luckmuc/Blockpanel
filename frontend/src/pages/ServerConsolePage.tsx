@@ -295,7 +295,7 @@ const ServerConsolePage: React.FC = () => {
 
         <Box sx={{ width: "100%" }}>
           <Tooltip title="Settings" placement="right">
-            <Box sx={{ display: "flex", alignItems: "center", px: 2, py: 1.5, cursor: "pointer", color: hovered === "settings" ? "#1976d2" : "#fff", background: hovered === "settings" ? "rgba(25, 118, 210, 0.08)" : undefined, borderRadius: 2, mb: 1, transition: "background 0.2s, color 0.2s", '&:hover': { background: "rgba(255,255,255,0.08)" } }} onMouseEnter={() => setHovered("settings")}>
+            <Box sx={{ display: "flex", alignItems: "center", px: 2, py: 1.5, cursor: "pointer", color: hovered === "settings" ? "#1976d2" : "#fff", background: hovered === "settings" ? "rgba(25, 118, 210, 0.08)" : undefined, borderRadius: 2, mb: 1, transition: "background 0.2s, color 0.2s", '&:hover': { background: "rgba(255,255,255,0.08)" } }} onMouseEnter={() => setHovered("settings")} onClick={() => navigate("/settings")}>
               <SettingsIcon fontSize="large" />
               <Slide direction="right" in={hovered === "settings"} mountOnEnter unmountOnExit>
                 <Typography sx={{ ml: 2, fontWeight: 600, color: "#b0c4de", whiteSpace: "nowrap" }}>Settings</Typography>

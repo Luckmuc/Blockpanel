@@ -13,6 +13,7 @@ import PluginsPage from "./pages/PluginsPage";
 import ServerControlsPage from "./pages/ServerControlsPage";
 import ChooseServerPage from "./pages/ChooseServerPage";
 import ServerConsolePage from "./pages/ServerConsolePage";
+import SettingsPage from "./pages/SettingsPage";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import WorldSettingsPage from "./pages/WorldSettingsPage";
 import { ThemeProvider } from '@mui/material/styles';
@@ -70,6 +71,7 @@ function App() {
             <Route path="/servers/:servername/controls" element={<RequireAuth><ServerControlsPage /></RequireAuth>} />
             <Route path="/servers/:servername/console" element={<RequireAuth><ServerConsolePage /></RequireAuth>} />
             <Route path="/servers/:servername/world-settings" element={<RequireAuth><WorldSettingsPage /></RequireAuth>} />
+            <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
             <Route path="/controls" element={<RequireAuth><ControlsPage /></RequireAuth>} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             {/* Catch-all: Weiterleitung zu /login falls nicht gefunden */}
