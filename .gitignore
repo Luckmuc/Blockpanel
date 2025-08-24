@@ -1,5 +1,13 @@
-echo "node_modules/" >> .gitignore
-echo ".next/" >> .gitignore
-echo "dist/" >> .gitignore
-echo ".env" >> .gitignore
-node_modules
+# Ignore executables
+*.exe
+*.jar
+
+# Ignore Node modules
+node_modules/
+
+# Ignore build/dist folders
+dist/
+build/
+
+# Ignore backup git
+.git_old/
