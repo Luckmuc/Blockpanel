@@ -1,0 +1,13 @@
+const path = require('path');
+const fs = require('fs');
+const exePath = process.execPath;
+const startupPath = path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+const shortcutPath = path.join(startupPath, 'Blockpanel.lnk');
+const regCmd = `reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "Blockpanel" /t REG_SZ /d "\"${exePath}\"" /f`;
+const vbsContent = `Set oWS = WScript.CreateObject("WScript.Shell")\nstrLink = "${shortcutPath}"\nSet oLink = oWS.CreateShortcut(strLink)\noLink.TargetPath = "${exePath}"\noLink.Arguments = ""\noLink.WorkingDirectory = "${path.dirname(exePath)}"\noLink.Save`;
+console.log('exePath:', exePath);
+console.log('regCmd:', regCmd);
+console.log('vbsPath:', path.join(startupPath, 'create_blockpanel_shortcut.vbs'));
+console.log('vbsContent:\n', vbsContent);
+if (fs.existsSync(path.join(__dirname, '..', 'build', 'generated-icon.ico'))) console.log('Found generated icon path');
+else console.log('No generated icon found (ok)');

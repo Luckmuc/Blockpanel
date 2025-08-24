@@ -1,0 +1,91 @@
+{
+  "results": [
+    {
+      "method": "GET",
+      "path": "/auth/status",
+      "status": 200,
+      "data": {
+        "auth_required": true,
+        "localhost_only": false,
+        "network_access": true,
+        "is_localhost": true,
+        "client_ip": "127.0.0.1"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/server/list",
+      "status": 200,
+      "data": {
+        "servers": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/server/ports/available",
+      "status": 200,
+      "data": {
+        "available_ports": [
+          25567,
+          25568,
+          25569,
+          25570,
+          25571,
+          25572,
+          25573,
+          25574,
+          25575,
+          11000
+        ],
+        "count": 10
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/server/create_and_start",
+      "status": 200,
+      "data": {
+        "message": "Server created and started successfully!",
+        "server_name": "test-smoke",
+        "port": 25566,
+        "status": "started",
+        "eula_accepted": true
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/server/accept_eula",
+      "status": 200,
+      "data": {
+        "message": "EULA accepted"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/server/ports/validate?port=25566",
+      "status": 200,
+      "data": {
+        "valid": true,
+        "port": 25566,
+        "port_status": "available"
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/server/delete",
+      "status": 200,
+      "data": {
+        "message": "Server 'test-smoke' deleted."
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/server/stop?servername=test-smoke",
+      "status": 200,
+      "data": {
+        "status": "not running"
+      }
+    }
+  ],
+  "failures": []
+}
