@@ -39,6 +39,7 @@ services:
 
     volumes:
     - ./proxy:/usr/local/etc/haproxy:rw
+    - ./proxy:/shared/proxy:rw
     networks:
     - minecraft_network
     depends_on:

@@ -35,6 +35,26 @@ class ProxyManager:
                     if allocated_port is None:
                         return False, 0
                     port = allocated_port
+                    
+            # Lese aktuelle Konfiguration
+            if os.path.exists(self.config_path):
+                with open(self.config_path, 'r') as f:
+                    current_config = f.read()
+            else:
+                # Erstelle Basis-Konfiguration falls nicht vorhanden
+                current_config = self._get_base_config()
+            
+            # Prüfe ob Server bereits existiert
+            if f"frontend minecraft_{server_name}" in current_config:
+                logger.warning(f"Server {server_name} bereits in HAProxy Konfiguration")
+                return True, port  # Return existing port
+            
+            # Check if the port is already used by a static configuration (ports 25565-25595)
+            if f"frontend minecraft_{port}" in current_config:
+                logger.info(f"Port {port} already has a static frontend configuration, server {server_name} will use existing configuration")
+                # Don't add duplicate configuration, just return success
+                return True, port
+                
             # Template für neuen Frontend/Backend
             frontend_config = f"""
 frontend minecraft_{server_name}
@@ -49,19 +69,6 @@ backend backend_{server_name}
     balance roundrobin
     server mc_{server_name} backend:{port} check inter 5s
 """
-            
-            # Lese aktuelle Konfiguration
-            if os.path.exists(self.config_path):
-                with open(self.config_path, 'r') as f:
-                    current_config = f.read()
-            else:
-                # Erstelle Basis-Konfiguration falls nicht vorhanden
-                current_config = self._get_base_config()
-            
-            # Prüfe ob Server bereits existiert
-            if f"frontend minecraft_{server_name}" in current_config:
-                logger.warning(f"Server {server_name} bereits in HAProxy Konfiguration")
-                return True, port  # Return existing port
             
             # Füge neue Konfiguration hinzu
             new_config = current_config + frontend_config + backend_config
@@ -137,27 +144,44 @@ backend backend_{server_name}
         Lädt HAProxy-Konfiguration neu
         """
         try:
-            # Check if reload script exists and is executable
-            if not os.path.exists(self.reload_script):
-                logger.warning(f"HAProxy Reload Script nicht gefunden: {self.reload_script}")
-                # Try alternative reload methods
-                return self._alternative_reload()
-            
-            # Make script executable if needed
+            # Try to reload HAProxy using docker exec to run the command in the proxy container
             try:
-                os.chmod(self.reload_script, 0o755)
+                # First try: Use docker exec to reload HAProxy directly in the proxy container
+                result = subprocess.run([
+                    'docker', 'exec', 'dockercontainer-proxy-1', 
+                    '/usr/local/bin/reload-haproxy.sh'
+                ], capture_output=True, text=True, timeout=10)
+                
+                if result.returncode == 0:
+                    logger.info("HAProxy erfolgreich neugeladen via docker exec")
+                    return True
+                else:
+                    logger.warning(f"Docker exec reload failed: {result.stderr}")
+                    # Fall back to alternative method
+                    
             except Exception as e:
-                logger.warning(f"Could not make reload script executable: {e}")
+                logger.warning(f"Docker exec method failed: {e}")
             
-            result = subprocess.run(['bash', self.reload_script], 
-                                  capture_output=True, text=True, timeout=10)
-            if result.returncode == 0:
-                logger.info("HAProxy erfolgreich neugeladen")
-                return True
-            else:
-                logger.error(f"HAProxy Reload fehlgeschlagen: {result.stderr}")
-                logger.debug(f"HAProxy Reload stdout: {result.stdout}")
-                return False
+            # Second try: Check if reload script exists and is executable locally
+            if os.path.exists(self.reload_script):
+                # Make script executable if needed
+                try:
+                    os.chmod(self.reload_script, 0o755)
+                except Exception as e:
+                    logger.warning(f"Could not make reload script executable: {e}")
+                
+                result = subprocess.run(['bash', self.reload_script], 
+                                      capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    logger.info("HAProxy erfolgreich neugeladen")
+                    return True
+                else:
+                    logger.error(f"HAProxy Reload fehlgeschlagen: {result.stderr}")
+                    logger.debug(f"HAProxy Reload stdout: {result.stdout}")
+                    return False
+            
+            # Third try: Alternative reload method
+            return self._alternative_reload()
                 
         except subprocess.TimeoutExpired:
             logger.error("HAProxy Reload timeout after 10 seconds")

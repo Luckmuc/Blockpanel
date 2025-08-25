@@ -65,7 +65,18 @@ const PanelServers: React.FC = () => {
   const handleStopServer = async (server: string) => {
     try {
       await stopServer(server, token);
-      setTimeout(() => fetchServers(token).then(setServers), 1000);
+      // Refresh server list with retry mechanism
+      const refreshServers = async () => {
+        try {
+          const updatedServers = await fetchServers(token);
+          setServers(updatedServers);
+        } catch (err) {
+          console.error('Failed to refresh server list:', err);
+        }
+      };
+      // Immediate refresh and delayed refresh to ensure status is updated
+      refreshServers();
+      setTimeout(refreshServers, 1000);
     } catch (err: any) {
       setError(err?.response?.data?.detail || err?.message || 'Failed to stop server.');
       console.error('Failed to stop server:', err);
@@ -194,10 +205,30 @@ const PanelServers: React.FC = () => {
       if (status === "started") {
         setServers((prev: Server[]) => prev.map((s: Server) => s.name === server ? { ...s, status: "running" } : s));
       }
-      // Kein eigenes Polling mehr, das Ã¼bernimmt das useEffect oben
+      
+      // Refresh server list to get updated status
+      const refreshServers = async () => {
+        try {
+          const updatedServers = await fetchServers(token);
+          setServers(updatedServers);
+        } catch (err) {
+          console.error('Failed to refresh server list:', err);
+        }
+      };
+      // Delayed refresh to ensure backend has updated the status
+      setTimeout(refreshServers, 2000);
+      
     } catch (err: any) {
       setError(err?.response?.data?.detail || err?.message || 'Failed to start server.');
       console.error('Failed to start server:', err);
+      
+      // Refresh server list even on error to get accurate status
+      try {
+        const updatedServers = await fetchServers(token);
+        setServers(updatedServers);
+      } catch (refreshErr) {
+        console.error('Failed to refresh server list after error:', refreshErr);
+      }
     }
   };
 
@@ -229,12 +260,30 @@ const PanelServers: React.FC = () => {
           setEulaDialog({ open: false, server: undefined, isNewServer: false });
           setEulaWaiting(false);
           setShowStatusPanel({ open: true, server: eulaDialog.server });
-          fetchServers(token).then(setServers);
+          // Refresh server list with retry mechanism
+          const refreshServers = async () => {
+            try {
+              const updatedServers = await fetchServers(token);
+              setServers(updatedServers);
+            } catch (err) {
+              console.error('Failed to refresh server list:', err);
+            }
+          };
+          refreshServers();
         }, 1000);
       } else {
         setEulaDialog({ open: false, server: undefined, isNewServer: false });
         setEulaWaiting(false);
-        fetchServers(token).then(setServers);
+        // Refresh server list with retry mechanism
+        const refreshServers = async () => {
+          try {
+            const updatedServers = await fetchServers(token);
+            setServers(updatedServers);
+          } catch (err) {
+            console.error('Failed to refresh server list:', err);
+          }
+        };
+        refreshServers();
       }
     } catch (err: any) {
       const errorMsg = err?.response?.data?.detail || err?.message || "Failed to accept EULA or start server. Please try again.";
@@ -247,7 +296,16 @@ const PanelServers: React.FC = () => {
   // Handler for closing status panel
   const handleCloseStatusPanel = () => {
     setShowStatusPanel({ open: false, server: undefined });
-    fetchServers(token).then(setServers);
+    // Refresh server list with retry mechanism
+    const refreshServers = async () => {
+      try {
+        const updatedServers = await fetchServers(token);
+        setServers(updatedServers);
+      } catch (err) {
+        console.error('Failed to refresh server list:', err);
+      }
+    };
+    refreshServers();
   };
 
   useEffect(() => {
@@ -256,6 +314,20 @@ const PanelServers: React.FC = () => {
       .then(setServers)
       .catch(() => setError("Could not load servers."))
       .finally(() => setLoading(false));
+  }, [token]);
+
+  // Periodic refresh to keep server list updated
+  useEffect(() => {
+    const refreshInterval = setInterval(async () => {
+      try {
+        const updatedServers = await fetchServers(token);
+        setServers(updatedServers);
+      } catch (err) {
+        console.error('Failed to refresh server list periodically:', err);
+      }
+    }, 10000); // Refresh every 10 seconds
+
+    return () => clearInterval(refreshInterval);
   }, [token]);
 
   // Handler for creating server - now shows EULA dialog first
@@ -375,6 +447,16 @@ const PanelServers: React.FC = () => {
         true, 
         token
       );
+      
+      // Optimistically add the new server to the list immediately
+      const newServer = {
+        name: pendingServerCreation.name,
+        address: `localhost:${pendingServerCreation.port}`,
+        status: "booting", // Initially show as booting
+        port: pendingServerCreation.port
+      };
+      setServers(prev => [...prev, newServer]);
+      
       setCreationProgress(prev => ({ 
         ...prev, 
         completed: true,
@@ -400,8 +482,30 @@ const PanelServers: React.FC = () => {
       // Validate the default port
       setTimeout(() => validatePortInput("25565"), 100);
       setPendingServerCreation(null);
-      // Refresh server list
-      fetchServers(token).then(setServers);
+      
+      // Refresh server list with retry mechanism
+      const refreshServers = async () => {
+        try {
+          const updatedServers = await fetchServers(token);
+          setServers(updatedServers);
+        } catch (err) {
+          console.error('Failed to refresh server list:', err);
+          // Retry once after a short delay
+          setTimeout(async () => {
+            try {
+              const retryServers = await fetchServers(token);
+              setServers(retryServers);
+            } catch (retryErr) {
+              console.error('Failed to refresh server list on retry:', retryErr);
+            }
+          }, 2000);
+        }
+      };
+      
+      // Immediate refresh and also a delayed refresh to ensure the server appears
+      refreshServers();
+      setTimeout(refreshServers, 3000);
+      
     } catch (error: any) {
       setCreationProgress(prev => ({ 
         ...prev, 
@@ -412,6 +516,14 @@ const PanelServers: React.FC = () => {
       setCreationProgressDialog(false);
       setEulaInfo(error.message || "Failed to create server. Please try again.");
       setPendingServerCreation(null);
+      
+      // Also refresh servers in case of error (server might have been partially created)
+      try {
+        const updatedServers = await fetchServers(token);
+        setServers(updatedServers);
+      } catch (err) {
+        console.error('Failed to refresh server list after error:', err);
+      }
     }
     setCreating(false);
   };

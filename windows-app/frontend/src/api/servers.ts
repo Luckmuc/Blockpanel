@@ -107,7 +107,10 @@ export async function createAndStartServer(
         port: port.toString(),
         accept_eula: acceptEula.toString()
       }),
-      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      { 
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        timeout: 180000 // 3 minutes timeout for server creation
+      }
     );
     return response.data;
   } catch (err: any) {
