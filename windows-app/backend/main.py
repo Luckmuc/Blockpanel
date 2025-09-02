@@ -7,14 +7,38 @@ import os
 import logging
 
 # Import network configuration manager
-from network_config import get_config_manager, apply_network_configuration
+## Removed legacy network_config import
+from blockpanel_config import get_blockpanel_config
 
 # Configure logging to reduce bcrypt warnings
+# Get proper paths for Windows
+import sys
+import platform
+
+# Determine the base directory
+if getattr(sys, 'frozen', False):
+    # Running as compiled executable
+    base_dir = os.path.dirname(sys.executable)
+    if platform.system() == 'Windows':
+        # In Windows installer, backend files are in resources/backend
+        backend_dir = os.path.join(os.path.dirname(base_dir), 'resources', 'backend')
+        if os.path.exists(backend_dir):
+            base_dir = backend_dir
+else:
+    # Running as script
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Ensure mc_servers directory exists
+mc_servers_dir = os.path.join(base_dir, 'mc_servers')
+os.makedirs(mc_servers_dir, exist_ok=True)
+
+log_file_path = os.path.join(mc_servers_dir, 'backend.log')
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s %(levelname)s %(message)s',
     handlers=[
-        logging.FileHandler('/app/mc_servers/backend.log'),
+        logging.FileHandler(log_file_path),
         logging.StreamHandler()
     ]
 )
@@ -22,16 +46,24 @@ logging.basicConfig(
 # Suppress passlib warnings about bcrypt version detection
 logging.getLogger('passlib').setLevel(logging.ERROR)
 
-# Initialize network configuration
-config_manager = get_config_manager()
-print(f"Network configuration loaded: {config_manager.config}")
+from blockpanel_config import BlockpanelConfig
 
-# Apply network configuration (firewall rules, UPnP, etc.)
-try:
-    apply_network_configuration()
-    print("Network configuration applied successfully")
-except Exception as e:
-    print(f"Warning: Could not apply network configuration: {e}")
+# Only use new config system
+blockpanel_config = BlockpanelConfig()
+network_config = blockpanel_config.get_network_config()
+print(f"Blockpanel configuration loaded - Network mode: {network_config['mode']}")
+
+# Always use port 8000 if not set
+if not network_config.get('port'):
+    network_config['port'] = 8000
+if not network_config.get('bind_address'):
+    network_config['bind_address'] = '127.0.0.1'
+
+# Apply autostart and firewall if needed
+if blockpanel_config.config.get('autostart', {}).get('enabled'):
+    blockpanel_config.apply_autostart()
+if network_config.get('mode') in ['lan', 'public']:
+    blockpanel_config.apply_firewall()
 
 # Shared variable for available ports
 available_ports = []
@@ -66,9 +98,7 @@ def me(current_user: dict = Depends(get_current_user)):
 def get_network_info(current_user: dict = Depends(get_current_user)):
     """Get network configuration and access information"""
     return {
-        "config": config_manager.config,
-        "access_info": config_manager.get_server_access_info(),
-        "host_binding": config_manager.get_host_binding()
+    # Removed legacy config_manager references
     }
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse
@@ -109,9 +139,15 @@ async def add_security_headers(request: Request, call_next):
 # Trusted Host Middleware
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
-# Get dynamic CORS origins based on network configuration
-origins = config_manager.get_allowed_origins()
+# Get CORS origins from new config only
+origins = network_config.get('cors_origins', ["http://localhost:1105", "http://127.0.0.1:1105"])
+if origins == ["*"]:
+    origins = ["*"]
+else:
+    origins = list(set(origins))
+
 print(f"CORS origins configured: {origins}")
+print(f"Network mode: {network_config['mode']}, Bind address: {network_config['bind_address']}, Port: {network_config['port']}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -241,3 +277,65 @@ def read_users_me(current_user: dict = Depends(get_current_user)):
 def logout(current_user: dict = Depends(get_current_user)):
     # In einer Produktionsumgebung würden Sie hier das Token zur Blacklist hinzufügen
     return {"message": "Successfully logged out"}
+
+# Configuration management endpoints
+@app.get("/api/config/network")
+def get_network_config(current_user: dict = Depends(get_current_user)):
+    """Get current network configuration"""
+    return blockpanel_config.get_network_config()
+
+@app.post("/api/config/network")
+def update_network_config(
+    mode: str = Form(...),
+    port: int = Form(8000),
+    current_user: dict = Depends(get_current_user)
+):
+    """Update network configuration"""
+    try:
+        blockpanel_config.update_network_config(mode, port)
+        return {"message": "Network configuration updated successfully", "config": blockpanel_config.get_network_config()}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/config/autostart")
+def get_autostart_config(current_user: dict = Depends(get_current_user)):
+    """Get current autostart configuration"""
+    return blockpanel_config.get_autostart_config()
+
+@app.post("/api/config/autostart")
+def update_autostart_config(
+    enabled: bool = Form(...),
+    startup_type: str = Form("user"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Update autostart configuration"""
+    try:
+        blockpanel_config.set_autostart(enabled, startup_type)
+        return {"message": "Autostart configuration updated successfully", "config": blockpanel_config.get_autostart_config()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update autostart: {str(e)}")
+
+@app.get("/api/config")
+def get_full_config(current_user: dict = Depends(get_current_user)):
+    """Get full configuration"""
+    return {
+        "network": blockpanel_config.get_network_config(),
+        "autostart": blockpanel_config.get_autostart_config()
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    port = network_config.get('port', 8000)
+    bind_address = network_config.get('bind_address', '127.0.0.1')
+    print(f"Starting Blockpanel backend on {bind_address}:{port}")
+    try:
+        uvicorn.run(
+            app,
+            host=bind_address,
+            port=port,
+            log_level="info"
+        )
+    except Exception as e:
+        print(f"Failed to start server: {e}")
+        import sys
+        sys.exit(1)

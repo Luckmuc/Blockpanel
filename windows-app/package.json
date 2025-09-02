@@ -12,8 +12,7 @@
     "copy-frontend": "xcopy \"frontend\\dist\" \"backend\\frontend_dist\" /E /I /Y",
     "install-deps": "npm install && cd frontend && npm install && cd ../backend && pip install -r requirements.txt",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder",
-    "dist-inno": "npm run pack && powershell -Command \"& { if (Get-Command iscc -ErrorAction SilentlyContinue) { iscc build\\blockpanel-inno.iss } else { Write-Host 'Installing Inno Setup...' -ForegroundColor Yellow; Start-Process -FilePath 'https://jrsoftware.org/download.php/is.exe' -Wait; iscc build\\blockpanel-inno.iss } }\""
+    "dist": "electron-builder"
   },
   "build": {
     "appId": "com.blockpanel.app",
@@ -26,20 +25,26 @@
       "preload.js",
       "backend-manager.js",
       "server.js",
+      "installer_config.py",
       "frontend/dist/**/*",
       "backend/**/*",
       "!backend/__pycache__",
+      "!backend/**/__pycache__",
       "!backend/mc_servers",
-      "!backend/.env"
+      "!backend/.env",
+      "!**/.gitkeep",
+      "!**/*.pyc"
     ],
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
-  "icon": "build/generated-icon.ico"
+      "icon": "build/generated-icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -58,26 +63,38 @@
     },
     "extraResources": [
       {
-        "from": "../backend",
+        "from": "backend",
         "to": "backend",
-        "filter": ["!__pycache__", "!mc_servers", "!.env"]
-      }
-      ,
+        "filter": [
+          "!__pycache__",
+          "!**/__pycache__",
+          "!mc_servers",
+          "!.env",
+          "!**/*.pyc",
+          "!.gitkeep"
+        ]
+      },
+      {
+        "from": "installer_config.py",
+        "to": "installer_config.py"
+      },
       {
         "from": "build/python.zip",
         "to": "python.zip",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ]
   },
   "dependencies": {
     "express": "^4.21.2",
-    "http-proxy-middleware": "^3.0.3",
-    "fs-extra": "^11.2.0"
+    "fs-extra": "^11.2.0",
+    "http-proxy-middleware": "^3.0.3"
   },
   "devDependencies": {
-    "electron-builder": "^25.1.8",
-    "electron": "^32.0.0"
+    "electron": "^32.0.0",
+    "electron-builder": "^25.1.8"
   },
   "author": "Luckmuc",
   "license": "MIT"

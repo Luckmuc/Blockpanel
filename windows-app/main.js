@@ -10,6 +10,70 @@ let appConfig = {};
 
 const isDev = process.argv.includes('--dev');
 const isHeadless = process.argv.includes('--headless');
+const isConfigSetup = process.argv.includes('--config-setup');
+
+// Configuration setup function for installer
+async function setupConfiguration() {
+  const args = process.argv;
+  let networkMode = 'localhost';
+  let enableAutostart = false;
+  let startupType = 'user';
+  
+  // Parse arguments
+  const networkModeIndex = args.indexOf('--network-mode');
+  if (networkModeIndex !== -1 && networkModeIndex + 1 < args.length) {
+    networkMode = args[networkModeIndex + 1];
+  }
+  
+  if (args.includes('--enable-autostart')) {
+    enableAutostart = true;
+    const startupTypeIndex = args.indexOf('--startup-type');
+    if (startupTypeIndex !== -1 && startupTypeIndex + 1 < args.length) {
+      startupType = args[startupTypeIndex + 1];
+    }
+  }
+  
+  console.log(`Setting up configuration: network=${networkMode}, autostart=${enableAutostart}, startup-type=${startupType}`);
+  
+  // Create the installer configuration
+  try {
+    // Ensure app data directory exists
+    const appDataPath = path.join(require('os').homedir(), 'AppData', 'Roaming', 'blockpanel-windows', 'blockpanel-data');
+    await fs.ensureDir(appDataPath);
+    
+    // Create backend directory if it doesn't exist
+    const backendPath = path.join(appDataPath, 'backend');
+    if (!await fs.pathExists(backendPath)) {
+      const sourceBackendPath = app.isPackaged 
+        ? path.join(process.resourcesPath, 'backend')
+        : path.join(__dirname, '../backend');
+      
+      await fs.copy(sourceBackendPath, backendPath, {
+        filter: (src) => {
+          return !src.includes('__pycache__') && !src.includes('mc_servers');
+        }
+      });
+    }
+    
+    // Run configuration setup via Python
+    const { spawn } = require('child_process');
+    const pythonArgs = [
+      path.join(backendPath, 'blockpanel_config.py'),
+      '--network-mode', networkMode
+    ];
+    
+    if (enableAutostart) {
+      pythonArgs.push('--enable-autostart', '--startup-type', startupType);
+    }
+    
+    console.log('Configuration setup completed');
+    process.exit(0);
+    
+  } catch (error) {
+    console.error('Configuration setup failed:', error);
+    process.exit(1);
+  }
+}
 
 // Load configuration
 function loadConfig() {
@@ -34,9 +98,9 @@ function loadConfig() {
   console.log('Loaded config:', appConfig);
 }
 
-// Use port 1105 for both frontend and backend API
+// Use port 1105 for frontend, 8000 for backend API
 const FRONTEND_PORT = 1105;
-const BACKEND_PORT = 1105;
+const BACKEND_PORT = 8000;
 
 async function createWindow() {
   // If headless flag is set, only run background services and don't open a browser
@@ -51,7 +115,7 @@ async function createWindow() {
   try {
     // Wait for backend to respond (this will throw if it doesn't become ready)
     await setupFrontendServer();
-    const url = isDev ? 'http://localhost:5173' : 'http://127.0.0.1:1105/';
+    const url = isDev ? 'http://localhost:5173' : `http://127.0.0.1:${FRONTEND_PORT}/`;
     console.log('Opening default browser to', url);
     // Open external browser instead of embedding the site in an Electron window
     shell.openExternal(url);
@@ -188,8 +252,8 @@ function setAutoStart(enabled) {
 }
 
 async function setupFrontendServer() {
-  // Wait for backend to respond on localhost:1105 before returning
-  const url = 'http://127.0.0.1:1105/';
+  // Wait for backend to respond on localhost:8000 before returning
+  const url = `http://127.0.0.1:${BACKEND_PORT}/`;
   const maxMs = 20000;
   const intervalMs = 500;
   const start = Date.now();
@@ -278,11 +342,18 @@ async function setupAppData() {
   // Copy backend files if they don't exist
   const backendPath = path.join(appDataPath, 'backend');
   if (!await fs.pathExists(backendPath)) {
-    await fs.copy(path.join(__dirname, '../backend'), backendPath, {
+    // In packaged app, backend files are in resources/backend
+    const sourceBackendPath = app.isPackaged 
+      ? path.join(process.resourcesPath, 'backend')
+      : path.join(__dirname, '../backend');
+    
+    console.log(`Copying backend from: ${sourceBackendPath} to: ${backendPath}`);
+    await fs.copy(sourceBackendPath, backendPath, {
       filter: (src) => {
         return !src.includes('__pycache__') && !src.includes('mc_servers');
       }
     });
+    console.log('Backend files copied successfully');
   }
   
   // Create mc_servers directory
@@ -295,8 +366,14 @@ async function setupAppData() {
   
   // Copy frontend dist to backend
   const frontendDistPath = path.join(backendPath, 'frontend_dist');
-  const sourceFrontendDist = path.join(__dirname, '../frontend/dist');
-  const sourceBackendFrontendDist = path.join(__dirname, '../backend/frontend_dist');
+  
+  // In packaged app, frontend dist is in resources/backend/frontend_dist
+  const sourceFrontendDist = app.isPackaged 
+    ? path.join(process.resourcesPath, 'backend', 'frontend_dist')
+    : path.join(__dirname, '../frontend/dist');
+  const sourceBackendFrontendDist = app.isPackaged
+    ? path.join(process.resourcesPath, 'backend', 'frontend_dist')
+    : path.join(__dirname, '../backend/frontend_dist');
   
   // Try multiple sources for frontend dist
   let frontendSource = null;
@@ -320,6 +397,12 @@ async function setupAppData() {
 }
 
 app.whenReady().then(async () => {
+  // Handle configuration setup mode (for installer)
+  if (isConfigSetup) {
+    await setupConfiguration();
+    return;
+  }
+  
   // Load configuration first
   loadConfig();
   
