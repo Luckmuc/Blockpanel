@@ -1,0 +1,8 @@
+{
+  "autoStart": false,
+  "networkAccess": "local",
+  "publicAccess": false,
+  "localIP": "172.20.0.3",
+  "routerIP": "localhost",
+  "installDate": ""
+}

@@ -6,6 +6,9 @@ import yaml
 import os
 import logging
 
+# Import network configuration manager
+from network_config import get_config_manager, apply_network_configuration
+
 # Configure logging to reduce bcrypt warnings
 logging.basicConfig(
     level=logging.INFO,
@@ -18,6 +21,17 @@ logging.basicConfig(
 
 # Suppress passlib warnings about bcrypt version detection
 logging.getLogger('passlib').setLevel(logging.ERROR)
+
+# Initialize network configuration
+config_manager = get_config_manager()
+print(f"Network configuration loaded: {config_manager.config}")
+
+# Apply network configuration (firewall rules, UPnP, etc.)
+try:
+    apply_network_configuration()
+    print("Network configuration applied successfully")
+except Exception as e:
+    print(f"Warning: Could not apply network configuration: {e}")
 
 # Shared variable for available ports
 available_ports = []
@@ -46,6 +60,16 @@ app = FastAPI()
 @app.get("/api/me")
 def me(current_user: dict = Depends(get_current_user)):
     return {"username": current_user["username"]}
+
+# Endpoint to get network configuration and access information
+@app.get("/api/network-info")
+def get_network_info(current_user: dict = Depends(get_current_user)):
+    """Get network configuration and access information"""
+    return {
+        "config": config_manager.config,
+        "access_info": config_manager.get_server_access_info(),
+        "host_binding": config_manager.get_host_binding()
+    }
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -85,13 +109,9 @@ async def add_security_headers(request: Request, call_next):
 # Trusted Host Middleware
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
-origins = [
-    "http://localhost",
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://localhost:1105",
-    "*",
-]
+# Get dynamic CORS origins based on network configuration
+origins = config_manager.get_allowed_origins()
+print(f"CORS origins configured: {origins}")
 
 app.add_middleware(
     CORSMiddleware,

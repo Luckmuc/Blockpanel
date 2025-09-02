@@ -6,13 +6,14 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-  "prepare-python": "node build/download_python.js",
-  "build": "npm run build-frontend && npm run copy-frontend && npm run prepare-python && electron-builder",
-    "build-frontend": "cd ../frontend && npm run build",
-    "copy-frontend": "xcopy \"..\\frontend\\dist\" \"..\\backend\\frontend_dist\" /E /I /Y",
-    "install-deps": "npm install && cd ../frontend && npm install && cd ../backend && pip install -r requirements.txt",
+    "prepare-python": "node build/download_python.js",
+    "build": "npm run build-frontend && npm run copy-frontend && npm run prepare-python && electron-builder",
+    "build-frontend": "cd frontend && npm run build",
+    "copy-frontend": "xcopy \"frontend\\dist\" \"backend\\frontend_dist\" /E /I /Y",
+    "install-deps": "npm install && cd frontend && npm install && cd ../backend && pip install -r requirements.txt",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "dist-inno": "npm run pack && powershell -Command \"& { if (Get-Command iscc -ErrorAction SilentlyContinue) { iscc build\\blockpanel-inno.iss } else { Write-Host 'Installing Inno Setup...' -ForegroundColor Yellow; Start-Process -FilePath 'https://jrsoftware.org/download.php/is.exe' -Wait; iscc build\\blockpanel-inno.iss } }\""
   },
   "build": {
     "appId": "com.blockpanel.app",
@@ -25,20 +26,16 @@
       "preload.js",
       "backend-manager.js",
       "server.js",
-      "../frontend/dist/**/*",
-      "../backend/**/*",
-      "!../backend/__pycache__",
-      "!../backend/mc_servers",
-      "!../backend/.env"
+      "frontend/dist/**/*",
+      "backend/**/*",
+      "!backend/__pycache__",
+      "!backend/mc_servers",
+      "!backend/.env"
     ],
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
-        },
-        {
-          "target": "portable",
           "arch": ["x64"]
         }
       ],
@@ -51,8 +48,13 @@
       "createStartMenuShortcut": true,
       "installerHeaderIcon": "build/generated-icon.ico",
       "installerIcon": "build/generated-icon.ico",
-      "uninstallerIcon": "build/generated-icon.ico"
-  ,"include": "build/installer.nsh"
+      "uninstallerIcon": "build/generated-icon.ico",
+      "include": "build/basic-config.nsh",
+      "displayLanguageSelector": false,
+      "allowElevation": true,
+      "perMachine": false,
+      "warningsAsErrors": false,
+      "runAfterFinish": false
     },
     "extraResources": [
       {

@@ -48,7 +48,7 @@ const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   // Inaktivitäts-Logout nach 5 Minuten
   useEffect(() => {
     if (!token) return;
-    let timer: number;
+    let timer: NodeJS.Timeout;
     const resetTimer = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {

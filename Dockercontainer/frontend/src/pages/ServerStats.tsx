@@ -196,9 +196,9 @@ function parsePercent(used: string, max: string): string {
                   }}
                   onMouseEnter={() => setHovered(item.key)}
                   onClick={() => {
-                    if (item.key === "servers") navigate("/servers");
-                    if (item.key === "plugins") navigate("/plugins");
-                    if (item.key === "controls") navigate("/controls");
+                      if (item.key === "servers") navigate("/servers");
+                      if (item.key === "plugins") navigate("/plugins");
+                      if (item.key === "controls") navigate("/controls");
                   }}
                 >
                   {item.icon}

@@ -94,7 +94,7 @@ const ServerControlsPage: React.FC = () => {
                 onClick={() => {
                   if (item.key === "servers") navigate("/servers");
                   if (item.key === "plugins") navigate("/plugins");
-                  if (item.key === "controls") navigate(`/servers/${servername}/controls`);
+                  if (item.key === "controls") navigate(`/controls`);
                 }}
               >
                 {item.icon}

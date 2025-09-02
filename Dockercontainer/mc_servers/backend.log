@@ -1,0 +1,10 @@
+2025-08-29 14:35:22,110 INFO Allocated preferred port 25565 to test
+2025-08-29 14:35:22,111 INFO Allocated requested port 25565 for server test
+2025-08-29 14:35:29,370 INFO Starting initial run for server test with 2048MB RAM on port 25565
+2025-08-29 14:35:49,720 INFO Initial run force-killed for test
+2025-08-29 14:35:49,725 INFO Set port 25565 for server test
+2025-08-29 14:35:49,730 INFO Server test already has port 25565
+2025-08-29 14:35:49,735 INFO Port 25565 already has a static frontend configuration, server test will use existing configuration
+2025-08-29 14:35:49,735 INFO Added HAProxy configuration for test on port 25565
+2025-08-29 14:35:49,739 INFO Created and accepted EULA file for test
+2025-08-29 14:35:49,840 INFO Server test gestartet (PID 46)

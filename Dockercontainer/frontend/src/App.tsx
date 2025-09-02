@@ -13,6 +13,7 @@ import ServerControlsPage from "./pages/ServerControlsPage";
 import ChooseServerPage from "./pages/ChooseServerPage";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import WorldSettingsPage from "./pages/WorldSettingsPage";
+import ControlsLanding from "./pages/ControlsLanding";
 import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
 import { getTheme } from './theme';
@@ -67,6 +68,7 @@ function App() {
             <Route path="/servers/:servername/settings" element={<RequireAuth><ServerSettingsPage /></RequireAuth>} />
             <Route path="/servers/:servername/controls" element={<RequireAuth><ServerControlsPage /></RequireAuth>} />
             <Route path="/servers/:servername/world-settings" element={<RequireAuth><WorldSettingsPage /></RequireAuth>} />
+            <Route path="/controls" element={<RequireAuth><ControlsLanding /></RequireAuth>} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             {/* Catch-all: Weiterleitung zu /login falls nicht gefunden */}
             <Route path="*" element={<Navigate to="/login" replace />} />

@@ -1,0 +1,78 @@
+Applying patches
+Starting org.bukkit.craftbukkit.Main
+2025-08-29T14:36:12.006893387Z ServerMain WARN Advanced terminal features are not available in this environment
+[14:36:13 INFO]: [bootstrap] Running Java 21 (OpenJDK 64-Bit Server VM 21.0.8+9-LTS; Eclipse Adoptium Temurin-21.0.8+9) on Linux 6.6.87.1-microsoft-standard-WSL2 (amd64)
+[14:36:13 INFO]: [bootstrap] Loading Purpur 1.21.5-2450-HEAD@61d7f55 (2025-06-17T05:07:48Z) for Minecraft 1.21.5
+[14:36:14 INFO]: [PluginInitializerManager] Initializing plugins...
+[14:36:14 INFO]: [PluginInitializerManager] Initialized 0 plugins
+[14:36:16 INFO]: [ReobfServer] Remapping server...
+[14:36:35 INFO]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[14:36:37 INFO]: Found new data pack file/bukkit, loading it automatically
+[14:36:37 INFO]: Found new data pack paper, loading it automatically
+[14:36:47 INFO]: No existing world data, creating new world
+[14:36:48 INFO]: [ReobfServer] Done remapping server in 31664ms.
+[14:36:55 INFO]: Loaded 1373 recipes
+[14:36:56 INFO]: Loaded 1484 advancements
+[14:36:56 INFO]: Starting minecraft server version 1.21.5
+[14:36:56 WARN]: ****************************
+[14:36:56 WARN]: YOU ARE RUNNING THIS SERVER AS AN ADMINISTRATIVE OR ROOT USER. THIS IS NOT ADVISED.
+[14:36:56 WARN]: YOU ARE OPENING YOURSELF UP TO POTENTIAL RISKS WHEN DOING THIS.
+[14:36:56 WARN]: FOR MORE INFORMATION, SEE https://madelinemiller.dev/blog/root-minecraft-server/
+[14:36:56 WARN]: ****************************
+[14:36:56 INFO]: Loading properties
+[14:36:56 INFO]: This server is running Purpur version 1.21.5-2450-HEAD@61d7f55 (2025-06-17T05:07:48Z) (Implementing API version 1.21.5-R0.1-SNAPSHOT)
+[14:36:57 INFO]: [spark] This server bundles the spark profiler. For more information please visit https://docs.papermc.io/paper/profiling
+[14:36:57 INFO]: Server Ping Player Sample Count: 12
+[14:36:57 INFO]: Using 4 threads for Netty based IO
+[14:36:58 INFO]: [MoonriseCommon] Paper is using 2 worker threads, 1 I/O threads
+[14:36:58 INFO]: [ChunkTaskScheduler] Chunk system is using population gen parallelism: true
+[14:37:00 INFO]: Default game type: SURVIVAL
+[14:37:00 INFO]: Generating keypair
+[14:37:00 INFO]: Starting Minecraft server on *:25565
+[14:37:00 INFO]: Using epoll channel type
+[14:37:01 INFO]: Paper: Using libdeflate (Linux x86_64) compression from Velocity.
+[14:37:01 INFO]: Paper: Using OpenSSL 3.x.x (Linux x86_64) cipher from Velocity.
+[14:37:01 INFO]: Preparing level "world"
+[14:37:16 INFO]: Preparing start region for dimension minecraft:overworld
+[14:37:16 INFO]: Preparing spawn area: 2%
+[14:37:17 INFO]: Preparing spawn area: 2%
+[14:37:17 INFO]: Preparing spawn area: 2%
+[14:37:18 INFO]: Preparing spawn area: 2%
+[14:37:18 INFO]: Preparing spawn area: 2%
+[14:37:19 INFO]: Preparing spawn area: 2%
+[14:37:19 INFO]: Preparing spawn area: 2%
+[14:37:20 INFO]: Preparing spawn area: 4%
+[14:37:20 INFO]: Preparing spawn area: 18%
+[14:37:21 INFO]: Preparing spawn area: 18%
+[14:37:21 INFO]: Preparing spawn area: 18%
+[14:37:22 INFO]: Preparing spawn area: 18%
+[14:37:22 INFO]: Preparing spawn area: 36%
+[14:37:23 INFO]: Preparing spawn area: 44%
+[14:37:23 INFO]: Preparing spawn area: 51%
+[14:37:24 INFO]: Preparing spawn area: 51%
+[14:37:24 INFO]: Preparing spawn area: 51%
+[14:37:25 INFO]: Preparing spawn area: 63%
+[14:37:26 INFO]: Preparing spawn area: 63%
+[14:37:26 INFO]: Preparing spawn area: 65%
+[14:37:26 INFO]: Preparing spawn area: 67%
+[14:37:26 INFO]: Time elapsed: 10328 ms
+[14:37:26 INFO]: Preparing start region for dimension minecraft:the_nether
+[14:37:26 INFO]: Preparing spawn area: 2%
+[14:37:27 INFO]: Preparing spawn area: 2%
+[14:37:27 INFO]: Preparing spawn area: 18%
+[14:37:28 INFO]: Preparing spawn area: 48%
+[14:37:28 INFO]: Preparing spawn area: 61%
+[14:37:29 INFO]: Time elapsed: 2218 ms
+[14:37:29 INFO]: Preparing start region for dimension minecraft:the_end
+[14:37:29 INFO]: Preparing spawn area: 2%
+[14:37:29 INFO]: Preparing spawn area: 36%
+[14:37:29 INFO]: Time elapsed: 804 ms
+[14:37:30 INFO]: [spark] Starting background profiler...
+[14:37:31 INFO]: Done preparing level "world" (29.686s)
+[14:37:31 INFO]: Running delayed init tasks
+[14:37:31 INFO]: Done (81.956s)! For help, type "help"
+[14:37:31 INFO]: *************************************************************************************
+[14:37:31 INFO]: This is the first time you're starting this server.
+[14:37:31 INFO]: It's recommended you read our 'Getting Started' documentation for guidance.
+[14:37:31 INFO]: View this and more helpful information here: https://docs.papermc.io/paper/next-steps
+[14:37:31 INFO]: *************************************************************************************

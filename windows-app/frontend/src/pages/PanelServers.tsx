@@ -453,7 +453,7 @@ const PanelServers: React.FC = () => {
         name: pendingServerCreation.name,
         address: `localhost:${pendingServerCreation.port}`,
         status: "booting", // Initially show as booting
-        port: pendingServerCreation.port
+        port: pendingServerCreation.port.toString()
       };
       setServers(prev => [...prev, newServer]);
       
