@@ -11,30 +11,23 @@ A private web panel for Minecraft server hosting. Runs on Docker and maybe Windo
 - Create worlds and much more
 
 ## Quickstart
-1. `docker-compose up --build`
-2. Test the panel at http://localhost:1105
+### Windows
+ - Download the Blockpanel Setup.exe file
+ - Run it locally and go trough the installer
+ - Enjoy Blockpanel at port 1105 running on your PC :)
 
-# Blockpanel Backend
+### Docker
+- Clone this Github Repository
+```sh
+git clone https://github.com/Luckmuc/Blockpanel.git
+```
+- Go in the right directory
+```sh
+cd Blockpanel/Dockercontainer
+```
+- Setup your container (for newer versions, remove the - from docker-compose)
+```sh
+docker-compose up --build
+```
+- Enjoy your Blockpanel instance :)
 
-## Features
-- FastAPI backend for Minecraft server panel
-- Multi-server management (Start, Stop, Kill, Restart, Status, Properties, Logs, Plugins, Worlds, EULA, Auth)
-- tmux process handling
-- JWT auth, secure uploads, directory traversal protection
-- Docker and docker-compose ready
-
-## Quickstart
-
-1. **Build & Start**
-   ```sh
-   docker compose up --build
-   ```
-
-2. **Default Login**
-   - Username: `admin`
-   - Password: `admin`
-
-## Security
-- JWT auth for all critical endpoints
-- Rate limiting recommended (optional)
-- Directory traversal protection everywhere
