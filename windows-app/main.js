@@ -75,9 +75,10 @@ async function setupConfiguration() {
   }
 }
 
-// Load configuration
+// Load configuration from installer-generated config/app-config.json
 function loadConfig() {
-  const configPath = path.join(__dirname, 'config.json');
+  // Try to load from config/app-config.json (created by installer)
+  const configPath = path.join(__dirname, 'config', 'app-config.json');
   try {
     if (fs.existsSync(configPath)) {
       appConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -85,14 +86,16 @@ function loadConfig() {
       // Default config
       appConfig = {
         autoStart: false,
-        networkAccess: false
+        networkAccess: 'local',
+        publicAccess: false
       };
     }
   } catch (error) {
     console.log('Config load error, using defaults:', error);
     appConfig = {
       autoStart: false,
-      networkAccess: false
+      networkAccess: 'local',
+      publicAccess: false
     };
   }
   console.log('Loaded config:', appConfig);
@@ -103,23 +106,18 @@ const FRONTEND_PORT = 1105;
 const BACKEND_PORT = 8000;
 
 async function createWindow() {
-  // If headless flag is set, only run background services and don't open a browser
+  // Always start backend and frontend, then open browser and hide to tray
   if (isHeadless) {
     console.log('Running in headless mode — no GUI will be shown.');
     await setupFrontendServer();
-    // Keep process alive for background service
     return;
   }
-
-  // Non-headless behavior: ensure backend is ready and open the user's default browser
   try {
-    // Wait for backend to respond (this will throw if it doesn't become ready)
     await setupFrontendServer();
     const url = isDev ? 'http://localhost:5173' : `http://127.0.0.1:${FRONTEND_PORT}/`;
-    console.log('Opening default browser to', url);
-    // Open external browser instead of embedding the site in an Electron window
+    // Open default browser to Blockpanel
     shell.openExternal(url);
-    // Create a minimal hidden window only so the app has a GUI context for tray/menu if needed
+    // Create a hidden window for tray context
     mainWindow = new BrowserWindow({
       width: 1200,
       height: 800,
@@ -128,20 +126,11 @@ async function createWindow() {
         contextIsolation: true,
         preload: path.join(__dirname, 'preload.js')
       },
-      // Prefer a generated installer icon if available, fallback to frontend project icon
-      icon: (function() {
-        const gen = path.join(__dirname, '../build/generated-icon.ico');
-        const alt = path.join(__dirname, '../frontend/project-icon.ico');
-        try { if (fs.existsSync(gen)) return gen } catch(e) {}
-        return alt;
-      })(),
+  icon: path.join(__dirname, 'windows-app-icon.ico'),
       show: false
     });
-    // Remove menu bar completely
     mainWindow.setMenuBarVisibility(false);
-    // Do not load remote content into the BrowserWindow
     mainWindow.on('closed', () => { mainWindow = null; });
-    // Intercept close and hide so the process keeps running in background when user closes UI
     mainWindow.on('close', (e) => {
       if (app.isQuiting) return;
       e.preventDefault();
@@ -156,16 +145,21 @@ async function createWindow() {
 let tray = null;
 function createTray() {
   try {
-    const iconPath = path.join(__dirname, '../frontend/project-icon.ico');
+  const iconPath = path.join(__dirname, 'windows-app-icon.ico');
     let image = null;
     if (nativeImage && nativeImage.createFromPath) {
       image = nativeImage.createFromPath(iconPath);
     }
     tray = new Tray(image || iconPath);
     const contextMenu = Menu.buildFromTemplate([
-      { label: 'Öffnen', click: () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } } },
+      { label: 'Open Blockpanel in Browser', click: () => {
+          const url = isDev ? 'http://localhost:5173' : `http://127.0.0.1:${FRONTEND_PORT}/`;
+          shell.openExternal(url);
+        }
+      },
+      { label: 'Show Tray Window', click: () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } } },
       { type: 'separator' },
-      { label: 'Beenden', click: () => { app.isQuiting = true; app.quit(); } }
+      { label: 'Quit', click: () => { app.isQuiting = true; app.quit(); } }
     ]);
     tray.setToolTip('Blockpanel');
     tray.setContextMenu(contextMenu);
@@ -397,20 +391,13 @@ async function setupAppData() {
 }
 
 app.whenReady().then(async () => {
-  // Handle configuration setup mode (for installer)
   if (isConfigSetup) {
     await setupConfiguration();
     return;
   }
-  
-  // Load configuration first
   loadConfig();
-  
   try {
-    // Setup app data directories
     const { appDataPath, backendPath, mcServersPath } = await setupAppData();
-    
-    // Ensure config.json exists next to backend so Python backend can read it
     try {
       const backendConfigPath = path.join(backendPath, 'config.json');
       await fs.writeFile(backendConfigPath, JSON.stringify(appConfig, null, 2), 'utf8');
@@ -418,39 +405,31 @@ app.whenReady().then(async () => {
     } catch (e) {
       console.warn('Failed to write backend config.json:', e.message || e);
     }
-    
-    // Start backend manager
     backendManager = new BackendManager(backendPath, mcServersPath);
-    
-    // Pass configuration to backend manager
     backendManager.setConfig(appConfig);
-    
     await backendManager.start();
-    
-    // Ensure autostart registry entry matches the config (Windows only)
     try {
       await setAutoStart(appConfig.autoStart === true);
     } catch (e) {
       console.warn('Autostart registry update failed:', e.message || e);
     }
-
-    // Create main window if not headless
-    if (!isHeadless) {
-      await createWindow();
-      createTray();
-    } else {
-      // Running headless: create tray so users can open UI and quit
-      createTray();
-      console.log('Running headless - GUI hidden, backend running in background');
-    }
-    
+    // Always create window and tray, but keep window hidden (tray only)
+    await createWindow();
+    createTray();
     app.on('activate', () => {
-  if (!isHeadless && BrowserWindow.getAllWindows().length === 0) createWindow();
+      if (!isHeadless && BrowserWindow.getAllWindows().length === 0) createWindow();
     });
-    
   } catch (error) {
     console.error('Failed to start application:', error);
-    dialog.showErrorBox('Startup Error', `Failed to start Blockpanel: ${error.message}`);
+    // Show notification if backend fails
+    if (Notification && Notification.isSupported()) {
+      new Notification({
+        title: 'Blockpanel Startup Error',
+        body: `Failed to start backend: ${error.message}`
+      }).show();
+    } else {
+      dialog.showErrorBox('Startup Error', `Failed to start Blockpanel: ${error.message}`);
+    }
     app.quit();
   }
 });

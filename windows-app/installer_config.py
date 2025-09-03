@@ -21,29 +21,55 @@ class BlockpanelInstaller:
         # Create config directory
         os.makedirs(self.config_dir, exist_ok=True)
         
-        # Create initial configuration
+        # Create initial configuration based on network mode
         if network_mode == "localhost":
             bind_address = "127.0.0.1"
-            cors_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
-        elif network_mode == "internal":
+            cors_origins = ["http://localhost:8000", "http://127.0.0.1:8000"]
+            network_description = "Localhost only - Most secure"
+        elif network_mode == "local-network":
             bind_address = "0.0.0.0"
-            cors_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://192.168.*:3000"]
-        elif network_mode == "public":
+            cors_origins = ["http://localhost:8000", "http://127.0.0.1:8000", "http://192.168.*:8000", "http://10.*:8000", "http://172.*:8000"]
+            network_description = "Local network access - WiFi/LAN users can access"
+        elif network_mode == "public-internet":
             bind_address = "0.0.0.0"
             cors_origins = ["*"]
+            network_description = "Public internet access - Requires port forwarding"
+        elif network_mode == "internal":  # Legacy support
+            bind_address = "0.0.0.0"
+            cors_origins = ["http://localhost:8000", "http://127.0.0.1:8000", "http://192.168.*:8000"]
+            network_description = "Internal network access"
+        elif network_mode == "public":  # Legacy support
+            bind_address = "0.0.0.0"
+            cors_origins = ["*"]
+            network_description = "Public access"
         else:
             raise ValueError(f"Invalid network mode: {network_mode}")
         
         config = {
             "network": {
                 "mode": network_mode,
+                "description": network_description,
                 "bind_address": bind_address,
                 "port": 8000,
-                "cors_origins": cors_origins
+                "cors_origins": cors_origins,
+                "minecraft_port_range": {
+                    "start": 25565,
+                    "end": 25575
+                }
             },
             "autostart": {
                 "enabled": enable_autostart,
-                "startup_type": startup_type
+                "startup_type": startup_type,
+                "description": "Start with Windows" if enable_autostart else "Manual startup"
+            },
+            "installer": {
+                "version": "2.0.0",
+                "redesigned": True,
+                "install_date": self.get_current_timestamp()
+            },
+            "security": {
+                "firewall_configured": network_mode != "localhost",
+                "public_access_warning_shown": network_mode == "public-internet"
             },
             "logging": {
                 "level": "INFO",
@@ -60,7 +86,79 @@ class BlockpanelInstaller:
         # Setup autostart if requested
         if enable_autostart:
             self.setup_autostart(startup_type)
+            
+        # Create user-friendly summary file
+        self.create_installation_summary(network_mode, enable_autostart)
     
+    def get_current_timestamp(self):
+        """Get current timestamp for configuration"""
+        from datetime import datetime
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    def create_installation_summary(self, network_mode, enable_autostart):
+        """Create a user-friendly installation summary"""
+        summary_file = os.path.join(self.config_dir, 'installation_summary.txt')
+        
+        # Determine access information
+        if network_mode == "localhost":
+            access_info = "http://localhost:8000 (This computer only)"
+            security_level = "🔒 High Security"
+        elif network_mode == "local-network":
+            access_info = "http://localhost:8000 or http://YOUR-LOCAL-IP:8000 (Local network)"
+            security_level = "🏠 Medium Security"
+        else:  # public-internet
+            access_info = "http://YOUR-PUBLIC-IP:8000 (Internet - requires port forwarding)"
+            security_level = "⚠️ Lower Security"
+        
+        startup_info = "✅ Enabled" if enable_autostart else "❌ Disabled"
+        
+        summary = f"""
+=====================================
+    BLOCKPANEL INSTALLATION SUMMARY
+=====================================
+
+📅 Installed: {self.get_current_timestamp()}
+🔧 Configuration: Redesigned Installer v2.0
+
+🌐 NETWORK ACCESS:
+   Mode: {network_mode}
+   Access URL: {access_info}
+   Security Level: {security_level}
+
+🚀 WINDOWS STARTUP:
+   Auto-start: {startup_info}
+
+📊 WEB PANEL:
+   URL: http://localhost:8000
+   Theme: Modern Material Design
+   Features: Real-time monitoring, server management
+
+🎮 MINECRAFT SERVERS:
+   Port Range: 25565-25575
+   Management: Full web-based control
+
+⚙️ CONFIGURATION FILES:
+   Main Config: {self.config_file}
+   Log Location: {os.path.join(self.config_dir, 'logs')}
+
+🔐 SECURITY NOTES:
+   • Change default passwords after first login
+   • Review firewall settings if using network access
+   • Keep Blockpanel updated for security patches
+
+📞 SUPPORT:
+   GitHub: https://github.com/Luckmuc/Blockpanel
+   Documentation: Available in web panel
+
+Thank you for choosing Blockpanel!
+=====================================
+"""
+        
+        with open(summary_file, 'w', encoding='utf-8') as f:
+            f.write(summary.strip())
+        
+        print(f"Installation summary saved to: {summary_file}")
+
     def setup_autostart(self, startup_type="user"):
         """Setup autostart in Windows registry"""
         try:
@@ -133,6 +231,16 @@ def main():
             startup_type = args[i + 1]
         elif arg == "--remove-autostart":
             installer.remove_autostart()
+            return
+        elif arg == "--help":
+            print("Blockpanel Installer Configuration")
+            print("Usage: python installer_config.py [options]")
+            print("Options:")
+            print("  --network-mode <mode>     Network access mode: localhost, local-network, public-internet")
+            print("  --enable-autostart        Enable Windows startup")
+            print("  --startup-type <type>     Startup type: user, system")
+            print("  --remove-autostart        Remove autostart entries")
+            print("  --help                    Show this help message")
             return
     
     # Setup configuration

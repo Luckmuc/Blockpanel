@@ -6,13 +6,15 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "prepare-python": "node build/download_python.js",
-    "build": "npm run build-frontend && npm run copy-frontend && npm run prepare-python && electron-builder",
+    "build": "node build.js",
+    "build-clean": "node build.js --clean",
     "build-frontend": "cd frontend && npm run build",
     "copy-frontend": "xcopy \"frontend\\dist\" \"backend\\frontend_dist\" /E /I /Y",
     "install-deps": "npm install && cd frontend && npm install && cd ../backend && pip install -r requirements.txt",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "clean": "rimraf dist && rimraf backend/frontend_dist",
+    "test-config": "python test_installer_config.py"
   },
   "build": {
     "appId": "com.blockpanel.app",
@@ -44,22 +46,27 @@
           ]
         }
       ],
-      "icon": "build/generated-icon.ico"
+  "icon": "windows-app-icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "installerHeaderIcon": "build/generated-icon.ico",
-      "installerIcon": "build/generated-icon.ico",
-      "uninstallerIcon": "build/generated-icon.ico",
-      "include": "build/basic-config.nsh",
+      "installerHeaderIcon": "windows-app-icon.ico",
+      "installerIcon": "windows-app-icon.ico",
+      "uninstallerIcon": "windows-app-icon.ico",
+      "include": "build/installer.nsh",
       "displayLanguageSelector": false,
       "allowElevation": true,
       "perMachine": false,
       "warningsAsErrors": false,
-      "runAfterFinish": false
+      "runAfterFinish": false,
+      "packElevateHelper": true,
+      "deleteAppDataOnUninstall": false,
+      "menuCategory": "Games",
+      "shortcutName": "Blockpanel",
+      "artifactName": "Blockpanel-Setup-${version}.${ext}"
     },
     "extraResources": [
       {
@@ -94,7 +101,8 @@
   },
   "devDependencies": {
     "electron": "^32.0.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "rimraf": "^5.0.0"
   },
   "author": "Luckmuc",
   "license": "MIT"
