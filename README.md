@@ -3,7 +3,7 @@
 
 A private web panel for Minecraft server hosting. Runs on Docker and maybe Windows 11 atm, Linux coming soon
 
-## Features (Backend)
+## Features
 - Start/stop/status servers
 - Upload plugins
 - Read logs
